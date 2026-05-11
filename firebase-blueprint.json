@@ -1,0 +1,103 @@
+{
+  "entities": {
+    "Patient": {
+      "title": "Patient",
+      "description": "Medical record for a patient",
+      "type": "object",
+      "properties": {
+        "firstName": { "type": "string" },
+        "middleName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "dob": { "type": "string", "format": "date" },
+        "gender": { "type": "string", "enum": ["Male", "Female", "Other"] },
+        "mobile": { "type": "string" },
+        "ownerId": { "type": "string", "description": "UID of the staff who registered the patient" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["firstName", "lastName", "dob", "gender", "mobile", "createdAt"]
+    },
+    "Visit": {
+      "title": "Visit",
+      "description": "A single hospital encounter/visit",
+      "type": "object",
+      "properties": {
+        "patientId": { "type": "string", "description": "Foreign key to Patient MRN" },
+        "status": { "type": "string", "enum": ["Booked", "Waiting", "In Progress", "Complete", "Follow-up", "Cancelled"] },
+        "currentDepartment": { "type": "string", "enum": ["Reception", "Nurse", "Doctor", "Lab", "Radiology", "Pharmacy", "Logs"] },
+        "token": { "type": "string" },
+        "vitals": {
+          "type": "object",
+          "properties": {
+            "temperature": { "type": "string" },
+            "bloodPressure": { "type": "string" },
+            "height": { "type": "string" },
+            "weight": { "type": "string" },
+            "pulse": { "type": "string" },
+            "respiratoryRate": { "type": "string" },
+            "oxygenSaturation": { "type": "string" },
+            "timestamp": { "type": "string" }
+          }
+        },
+        "soapNotes": {
+          "type": "object",
+          "properties": {
+            "subjective": { "type": "string" },
+            "objective": { "type": "string" },
+            "assessment": { "type": "string" },
+            "plan": { "type": "string" }
+          }
+        },
+        "diagnosis": { "type": "string" },
+        "orders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "type": { "type": "string", "enum": ["Laboratory", "Radiology", "Pharmacy"] },
+              "description": { "type": "string" },
+              "status": { "type": "string", "enum": ["Ordered", "Ready", "Dispensed", "Completed", "Pending"] },
+              "results": { "type": "string" },
+              "timestamp": { "type": "string" }
+            }
+          }
+        },
+        "isPaid": { "type": "boolean" },
+        "scheduledDate": { "type": "string", "format": "date" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "status", "currentDepartment", "token", "isPaid", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/patients/{patientId}": {
+      "schema": "Patient",
+      "description": "Collection of patient records"
+    },
+    "/visits/{visitId}": {
+      "schema": "Visit",
+      "description": "Collection of visit/encounter records"
+    },
+    "/staff/{userId}": {
+      "schema": {
+        "title": "Staff",
+        "type": "object",
+        "properties": {
+          "role": { "type": "string", "enum": ["Reception", "Nurse", "Doctor", "Lab", "Radiology", "Pharmacy"] }
+        }
+      },
+      "description": "Staff roles mapping"
+    },
+    "/admins/{userId}": {
+      "schema": {
+        "title": "Admin",
+        "type": "object",
+        "properties": {
+          "email": { "type": "string" }
+        }
+      },
+      "description": "System administrators"
+    }
+  }
+}

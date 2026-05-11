@@ -1,0 +1,106 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Functions ---
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    
+    function isAdmin() { 
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); 
+    }
+    
+    function getStaffRole() {
+      return get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role;
+    }
+
+    // --- Validation Blueprints ---
+
+    function isValidPatient(data) {
+      return data.firstName is string && data.firstName.size() <= 100 &&
+             data.lastName is string && data.lastName.size() <= 100 &&
+             data.dob is string && data.dob.size() <= 20 &&
+             data.gender in ['Male', 'Female', 'Other'] &&
+             data.mobile is string && data.mobile.size() <= 20 &&
+             data.ownerId == request.auth.uid &&
+             data.createdAt == request.time;
+    }
+
+    function isValidVisit(data) {
+      return isValidId(data.patientId) &&
+             exists(/databases/$(database)/documents/patients/$(data.patientId)) &&
+             data.status in ['Booked', 'Waiting', 'In Progress', 'Complete', 'Follow-up'] &&
+             data.currentDepartment in ['Reception', 'Nurse', 'Doctor', 'Lab', 'Radiology', 'Pharmacy', 'Logs'] &&
+             data.token is string && data.token.size() <= 20 &&
+             data.isPaid is bool &&
+             data.createdAt == request.time &&
+             data.updatedAt == request.time;
+    }
+
+    // --- Collection Matches ---
+
+    match /patients/{patientId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isVerified() && isValidId(patientId) && isValidPatient(incoming()) && 
+                    incoming().keys().hasAll(['firstName', 'lastName', 'dob', 'gender', 'mobile', 'ownerId', 'createdAt']) &&
+                    incoming().keys().size() >= 7;
+      
+      allow update: if isVerified() && (
+        isAdmin() || (
+          incoming().ownerId == existing().ownerId && 
+          incoming().createdAt == existing().createdAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['firstName', 'middleName', 'lastName', 'dob', 'gender', 'mobile'])
+        )
+      );
+      
+      allow delete: if isAdmin();
+    }
+
+    match /visits/{visitId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isVerified() && isValidId(visitId) && isValidVisit(incoming()) &&
+                    incoming().keys().hasAll(['patientId', 'status', 'currentDepartment', 'token', 'isPaid', 'createdAt', 'updatedAt']) &&
+                    incoming().keys().size() >= 7;
+
+      allow update: if isVerified() && (
+        isAdmin() || (
+          incoming().patientId == existing().patientId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time && (
+            // Action: Update Status/Dept
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'currentDepartment', 'updatedAt']) ||
+            // Action: Update Vitals
+            incoming().diff(existing()).affectedKeys().hasAny(['vitals']) ||
+            // Action: Update SOAP/Diagnosis
+            incoming().diff(existing()).affectedKeys().hasAny(['soapNotes', 'diagnosis']) ||
+            // Action: manage Orders
+            incoming().diff(existing()).affectedKeys().hasOnly(['orders', 'updatedAt']) ||
+            // Action: Mark Paid
+            incoming().diff(existing()).affectedKeys().hasOnly(['isPaid', 'updatedAt'])
+          )
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    match /staff/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /admins/{userId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Only manageable via console or service account
+    }
+  }
+}
