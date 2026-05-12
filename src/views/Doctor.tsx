@@ -9,8 +9,6 @@ import {
   Clock,
   Thermometer,
   Shield,
-  Search,
-  ChevronRight,
   HeartPulse,
   Weight
 } from 'lucide-react';
@@ -40,6 +38,7 @@ export function Doctor() {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   const activeVisits = visits.filter(v => v.currentDepartment === 'Doctor' && v.status !== 'Complete' && v.status !== 'Cancelled');
+  const nursingQueue = visits.filter(v => v.currentDepartment === 'Nurse' && v.status !== 'Complete' && v.status !== 'Cancelled');
 
   const patientHistory = selectedVisitData 
     ? visits.filter(v => v.patientId === selectedVisitData.patient.id && v.id !== selectedVisitData.visit.id)
@@ -89,61 +88,96 @@ export function Doctor() {
   return (
     <div className="grid grid-cols-12 gap-6 h-full p-2">
       {/* Patient Queue Dashboard */}
-      <section className="col-span-12 lg:col-span-3 bento-card p-0 flex flex-col overflow-hidden">
-        <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
-          <div>
-            <h2 className="text-sm font-black tracking-widest uppercase flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-brand-blue animate-pulse" />
-              Inbound Queue
-            </h2>
-            <p className="text-[10px] text-slate-500 font-bold mt-1 uppercase tracking-widest leading-none">Physician Block 102</p>
+      <section className="col-span-12 lg:col-span-3 flex flex-col gap-6 overflow-hidden">
+        {/* Doctor's Queue */}
+        <div className="bento-card p-0 flex flex-col h-1/2 overflow-hidden">
+          <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+            <div>
+              <h2 className="text-sm font-black tracking-widest uppercase flex flex-col">
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-brand-blue animate-pulse" />
+                  قائمة الانتظار
+                </span>
+                <span className="text-[9px] text-slate-400 opacity-60">Doctor Queue</span>
+              </h2>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-400">
+              <span className="text-[10px] font-black">{activeVisits.length}</span>
+            </div>
           </div>
-          <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-400">
-            <Search className="w-4 h-4" />
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
+            {activeVisits.map(visit => {
+              const patient = patients.find(p => p.id === visit.patientId);
+              if (!patient) return null;
+              const isSelected = selectedVisitData?.visit.id === visit.id;
+              return (
+                <button
+                  key={visit.id}
+                  onClick={() => {
+                    setSelectedVisitId(visit.id);
+                    setSoap(visit.soapNotes || { subjective: '', objective: '', assessment: '', plan: '' });
+                    setDiagnosis(visit.diagnosis || '');
+                  }}
+                  className={cn(
+                    "w-full p-4 rounded-2xl border text-left transition-all duration-300 relative group overflow-hidden",
+                    selectedVisitId === visit.id 
+                      ? "bg-brand-blue border-transparent text-white shadow-[0_10px_30px_rgba(59,130,246,0.25)]" 
+                      : "bg-white border-slate-100 hover:border-brand-blue/30 text-slate-600"
+                  )}
+                >
+                  <div className="relative z-10">
+                    <div className="flex justify-between items-start mb-2">
+                      <span className={cn("text-[9px] font-mono font-black uppercase tracking-[0.2em]", isSelected ? "text-white/60" : "text-brand-blue")}>
+                        #{visit.token || '---'}
+                      </span>
+                      <Clock className={cn("w-3 h-3 opacity-40", isSelected ? "text-white" : "text-slate-400")} />
+                    </div>
+                    <h3 className="font-black tracking-tight text-sm uppercase italic truncate">{patient.firstName} {patient.lastName}</h3>
+                  </div>
+                </button>
+              );
+            })}
+            {activeVisits.length === 0 && (
+              <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-40 py-10 border border-dashed border-slate-100 rounded-3xl">
+                <Clock className="w-6 h-6 mb-2" />
+                <p className="text-[9px] font-black uppercase tracking-widest italic">No pending patients</p>
+              </div>
+            )}
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
-          {activeVisits.map(visit => {
-            const patient = patients.find(p => p.id === visit.patientId);
-            if (!patient) return null;
-            const isSelected = selectedVisitData?.visit.id === visit.id;
-            return (
-              <button
-                key={visit.id}
-                onClick={() => {
-                  setSelectedVisitId(visit.id);
-                  setSoap(visit.soapNotes || { subjective: '', objective: '', assessment: '', plan: '' });
-                  setDiagnosis(visit.diagnosis || '');
-                }}
-                className={cn(
-                  "w-full p-4 rounded-2xl border text-left transition-all duration-300 relative group overflow-hidden",
-                  selectedVisitId === visit.id 
-                    ? "bg-brand-blue border-transparent text-white shadow-[0_10px_30px_rgba(59,130,246,0.25)]" 
-                    : "bg-white border-slate-100 hover:border-brand-blue/30 text-slate-600"
-                )}
-              >
-                <div className="relative z-10">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className={cn("text-[9px] font-mono font-black uppercase tracking-[0.2em]", isSelected ? "text-white/60" : "text-brand-blue")}>
-                      #{visit.token || '---'}
-                    </span>
-                    <Clock className={cn("w-3 h-3 opacity-40", isSelected ? "text-white" : "text-slate-400")} />
-                  </div>
-                  <h3 className="font-black tracking-tight text-sm uppercase italic truncate">{patient.firstName} {patient.lastName}</h3>
-                  <div className={cn("mt-2 text-[9px] font-bold uppercase tracking-widest flex items-center justify-between", isSelected ? "text-white/40" : "text-slate-400")}>
-                    <span>{patient.gender} • {2024 - new Date(patient.dob).getFullYear()}Y</span>
-                    {isSelected && <ChevronRight className="w-3 h-3" />}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-          {activeVisits.length === 0 && (
-            <div className="h-64 flex flex-col items-center justify-center text-slate-400 border border-dashed border-slate-100 rounded-3xl opacity-50">
-              <Microscope className="w-8 h-8 mb-2" />
-              <p className="text-[10px] font-black uppercase tracking-widest italic opacity-40">Block Idle</p>
+
+        {/* Nursing View - Global Vision */}
+        <div className="bento-card-dark p-0 border-slate-800 flex flex-col flex-1 overflow-hidden">
+          <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/2">
+            <div>
+              <h2 className="text-white text-xs font-black tracking-widest uppercase flex flex-col">
+                <span className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  وحدة التمريض
+                </span>
+                <span className="text-[8px] text-slate-500 opacity-60">Nursing Unit (Triage)</span>
+              </h2>
             </div>
-          )}
+          </div>
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
+             {nursingQueue.map(visit => {
+                const patient = patients.find(p => p.id === visit.patientId);
+                return (
+                  <div key={visit.id} className="p-3 bg-white/5 border border-white/5 rounded-xl flex items-center justify-between group">
+                    <div>
+                      <p className="text-[10px] font-black text-white italic truncate">{patient?.firstName} {patient?.lastName}</p>
+                      <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">#{visit.token}</p>
+                    </div>
+                    <div className="px-2 py-1 bg-emerald-500/10 text-emerald-500 text-[7px] font-black rounded uppercase tracking-widest">
+                      Triage
+                    </div>
+                  </div>
+                );
+             })}
+             {nursingQueue.length === 0 && (
+               <p className="text-[8px] text-slate-600 font-mono text-center py-10 uppercase tracking-widest italic">No activity in nursing sector</p>
+             )}
+          </div>
         </div>
       </section>
 
@@ -163,8 +197,8 @@ export function Doctor() {
                  <Microscope className="w-10 h-10 text-white/10" />
                  <div className="absolute inset-0 border-t-2 border-brand-blue rounded-full opacity-40 animate-spin" />
                </motion.div>
-               <h2 className="text-xl font-black text-white italic tracking-tighter uppercase mb-2">Physician Workbench</h2>
-               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-10">Awaiting encrypted biometrics stream...</p>
+               <h2 className="text-xl font-black text-white italic tracking-tighter uppercase mb-2">جهة التحكم السريري</h2>
+               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-10">Physician Workbench // Clinical Intelligence</p>
                <div className="grid grid-cols-3 gap-8 text-center text-slate-600 max-w-md">
                  <div><p className="text-[10px] font-black text-white/20 mb-1">NODE_STAT</p><p className="text-xs font-bold uppercase tracking-widest text-emerald-500/50 italic">Operational</p></div>
                  <div><p className="text-[10px] font-black text-white/20 mb-1">ENCRYPTION</p><p className="text-xs font-bold uppercase tracking-widest text-brand-blue/50 italic">AES-256</p></div>

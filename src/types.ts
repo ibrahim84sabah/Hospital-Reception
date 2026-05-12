@@ -1,6 +1,16 @@
 export type VisitStatus = 'Booked' | 'Waiting' | 'In Progress' | 'Complete' | 'Follow-up' | 'Cancelled';
 
-export type Department = 'Reception' | 'Nurse' | 'Doctor' | 'Lab' | 'Radiology' | 'Pharmacy' | 'Logs';
+export type Department = 'Reception' | 'Nurse' | 'Doctor' | 'Lab' | 'Radiology' | 'Pharmacy' | 'Logs' | 'Admin';
+
+export type UserRole = 'Admin' | 'Doctor' | 'Nurse' | 'Staff';
+
+export interface UserProfile {
+  uid: string;
+  name: string;
+  role: UserRole;
+  employeeId: string;
+  createdAt: string;
+}
 
 export interface Vitals {
   temperature: string;

@@ -68,9 +68,26 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["patientId", "status", "currentDepartment", "token", "isPaid", "createdAt", "updatedAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Information about a staff member or administrator",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["Admin", "Doctor", "Nurse", "Staff"] },
+        "employeeId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "role", "employeeId", "createdAt"]
     }
   },
   "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Collection of staff and admin profiles"
+    },
     "/patients/{patientId}": {
       "schema": "Patient",
       "description": "Collection of patient records"
@@ -78,26 +95,6 @@
     "/visits/{visitId}": {
       "schema": "Visit",
       "description": "Collection of visit/encounter records"
-    },
-    "/staff/{userId}": {
-      "schema": {
-        "title": "Staff",
-        "type": "object",
-        "properties": {
-          "role": { "type": "string", "enum": ["Reception", "Nurse", "Doctor", "Lab", "Radiology", "Pharmacy"] }
-        }
-      },
-      "description": "Staff roles mapping"
-    },
-    "/admins/{userId}": {
-      "schema": {
-        "title": "Admin",
-        "type": "object",
-        "properties": {
-          "email": { "type": "string" }
-        }
-      },
-      "description": "System administrators"
     }
   }
 }

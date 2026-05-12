@@ -8,106 +8,62 @@ service cloud.firestore {
 
     // --- Helper Functions ---
     function isSignedIn() { return request.auth != null; }
-    function isVerified() { return isSignedIn(); }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     
-    function isAdmin() { 
-      return isSignedIn() && (
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        request.auth.token.email == 'ibrahim84sabah@gmail.com'
-      ); 
+    // Identity helpers
+    function isOwner(data) { return isSignedIn() && data.uid == request.auth.uid; }
+    
+    // RBAC: We use a get() for writes, but keep reads more open for performance
+    // In a production app, we might use custom claims for role-based list access.
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getRole() == 'Admin';
     }
 
-    // --- Validation Blueprints ---
-
-    function isValidPatient(data) {
-      return data.firstName is string && data.firstName.size() <= 100 &&
-             data.lastName is string && data.lastName.size() <= 100 &&
-             data.dob is string && data.dob.size() <= 20 &&
-             (data.gender == 'Male' || data.gender == 'Female' || data.gender == 'Other') &&
-             data.mobile is string && data.mobile.size() <= 20 &&
-             data.ownerId == request.auth.uid &&
-             data.hospitalId == 'default' &&
-             data.createdAt == request.time;
+    function isValidUser(data) {
+      return data.uid is string && 
+             data.name is string && data.name.size() > 0 &&
+             data.role in ['Admin', 'Doctor', 'Nurse', 'Staff'] &&
+             data.employeeId is string &&
+             data.createdAt is string;
     }
 
-    function isValidVisit(data) {
-      return isValidId(data.patientId) &&
-             exists(/databases/$(database)/documents/patients/$(data.patientId)) &&
-             data.hospitalId == 'default' &&
-             (data.status == 'Booked' || data.status == 'Waiting' || data.status == 'In Progress' || data.status == 'Complete' || data.status == 'Follow-up' || data.status == 'Cancelled') &&
-             (data.currentDepartment == 'Reception' || data.currentDepartment == 'Nurse' || data.currentDepartment == 'Doctor' || data.currentDepartment == 'Lab' || data.currentDepartment == 'Radiology' || data.currentDepartment == 'Pharmacy' || data.currentDepartment == 'Logs') &&
-             data.token is string && data.token.size() <= 20 &&
-             data.isPaid is bool &&
-             data.createdAt == request.time &&
-             data.updatedAt == request.time;
+    // --- User Profiles ---
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn(); 
+      allow create: if isSignedIn() && (userId == request.auth.uid || isAdmin()) && isValidUser(incoming());
+      allow update: if isSignedIn() && (
+        isAdmin() || 
+        (userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['name']) && isValidUser(incoming()))
+      );
+      allow delete: if isAdmin();
     }
 
-    // --- Collection Matches ---
+    // --- Patients ---
+    match /patients/{patientId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn(); 
+      allow update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
 
+    // --- Visits ---
+    match /visits/{visitId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // --- Connection Test ---
     match /test/connection {
       allow get: if true;
-    }
-
-    match /patients/{patientId} {
-      allow list: if isSignedIn() && resource.data.hospitalId == 'default';
-      allow get: if isSignedIn();
-      allow create: if isVerified() && isValidId(patientId) && isValidPatient(incoming()) && 
-                    incoming().keys().hasAll(['firstName', 'lastName', 'dob', 'gender', 'mobile', 'ownerId', 'hospitalId', 'createdAt']) &&
-                    incoming().keys().size() >= 8;
-      
-      allow update: if isVerified() && (
-        isAdmin() || (
-          incoming().ownerId == existing().ownerId && 
-          incoming().hospitalId == existing().hospitalId &&
-          incoming().createdAt == existing().createdAt &&
-          incoming().diff(existing()).affectedKeys().hasOnly(['firstName', 'middleName', 'lastName', 'dob', 'gender', 'mobile'])
-        )
-      );
-      
-      allow delete: if isAdmin();
-    }
-
-    match /visits/{visitId} {
-      allow list: if isSignedIn() && resource.data.hospitalId == 'default'; 
-      allow get: if isSignedIn();
-      allow create: if isVerified() && isValidId(visitId) && isValidVisit(incoming()) &&
-                    incoming().keys().hasAll(['patientId', 'hospitalId', 'status', 'currentDepartment', 'token', 'isPaid', 'createdAt', 'updatedAt']) &&
-                    incoming().keys().size() >= 8;
-
-      allow update: if isVerified() && (
-        isAdmin() || (
-          incoming().patientId == existing().patientId &&
-          incoming().hospitalId == existing().hospitalId &&
-          incoming().createdAt == existing().createdAt &&
-          incoming().updatedAt == request.time && (
-            // Action: Update Status/Dept
-            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'currentDepartment', 'updatedAt']) ||
-            // Action: Update Vitals
-            incoming().diff(existing()).affectedKeys().hasAny(['vitals']) ||
-            // Action: Update SOAP/Diagnosis
-            incoming().diff(existing()).affectedKeys().hasAny(['soapNotes', 'diagnosis']) ||
-            // Action: manage Orders
-            incoming().diff(existing()).affectedKeys().hasOnly(['orders', 'updatedAt']) ||
-            // Action: Mark Paid
-            incoming().diff(existing()).affectedKeys().hasOnly(['isPaid', 'updatedAt'])
-          )
-        )
-      );
-
-      allow delete: if isAdmin();
-    }
-
-    match /staff/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    match /admins/{userId} {
-      allow read: if isSignedIn();
-      allow write: if false; 
     }
   }
 }

@@ -10,11 +10,13 @@ import {
   writeBatch,
   orderBy,
   where,
-  serverTimestamp
+  getDocs,
+  getDoc,
+  limit
 } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Patient, Visit, Department, VisitStatus, Order } from '../types';
+import { db, auth, handleFirestoreError, OperationType, logOut, loginWithId, registerWithId } from '../lib/firebase';
+import { Patient, Visit, Department, VisitStatus, Order, UserProfile, UserRole } from '../types';
 
 interface HMSContextType {
   patients: Patient[];
@@ -22,7 +24,9 @@ interface HMSContextType {
   activeDepartment: Department;
   showDashboard: boolean;
   currentUser: User | null;
+  userProfile: UserProfile | null;
   isAuthReady: boolean;
+  systemHasUsers: boolean;
   setActiveDepartment: (dept: Department) => void;
   setShowDashboard: (show: boolean) => void;
   registerPatient: (patient: Omit<Patient, 'id' | 'createdAt'>) => Promise<Patient>;
@@ -37,6 +41,10 @@ interface HMSContextType {
   deactivateVisit: (visitId: string) => Promise<void>;
   saveVitalsAndTransfer: (visitId: string, vitals: Visit['vitals'], nextDept: Department) => Promise<void>;
   clearAllData: () => Promise<void>;
+  login: (id: string, pass: string) => Promise<void>;
+  registerNewUser: (id: string, pass: string, name: string, role: UserRole) => Promise<void>;
+  logout: () => Promise<void>;
+  provisionUserProfile: (name: string, role: UserRole) => Promise<void>;
 }
 
 const HMSContext = createContext<HMSContextType | undefined>(undefined);
@@ -47,14 +55,95 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
   const [activeDepartment, setActiveDepartment] = useState<Department>('Reception');
   const [showDashboard, setShowDashboard] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [systemHasUsers, setSystemHasUsers] = useState(true);
+
+  // Check if system has any users (for bootstrap)
+  useEffect(() => {
+    const checkUsers = async () => {
+      try {
+        const usersSnap = await getDocs(query(collection(db, 'users'), orderBy('createdAt'), where('role', '==', 'Admin'), limit(1)));
+        setSystemHasUsers(!usersSnap.empty);
+      } catch (error) {
+        // If query fails, it might be due to rules. We'll default to login screen.
+        console.warn("User check failed:", error);
+        setSystemHasUsers(true); 
+      }
+    };
+    checkUsers();
+  }, []);
 
   useEffect(() => {
-    return onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setIsAuthReady(true);
+    return onAuthStateChanged(auth, async (user) => {
+      try {
+        if (user) {
+          const profileSnap = await getDoc(doc(db, 'users', user.uid));
+          if (profileSnap.exists()) {
+            const profile = profileSnap.data() as UserProfile;
+            setUserProfile(profile);
+            // Default active department based on role
+            if (profile.role === 'Doctor') setActiveDepartment('Doctor');
+            else if (profile.role === 'Nurse') setActiveDepartment('Nurse');
+            else if (profile.role === 'Staff') setActiveDepartment('Reception');
+            else if (profile.role === 'Admin') setActiveDepartment('Admin');
+          } else {
+            console.error(`User profile missing for UID: ${user.uid}`);
+            setUserProfile(null);
+          }
+        } else {
+          setUserProfile(null);
+        }
+      } catch (error) {
+        console.error("Auth profile fetch error:", error);
+        handleFirestoreError(error, OperationType.GET, user ? `users/${user.uid}` : 'auth');
+      } finally {
+        setCurrentUser(user);
+        setIsAuthReady(true);
+      }
     });
   }, []);
+
+  const login = async (id: string, pass: string) => {
+    await loginWithId(id, pass);
+  };
+
+  const logout = async () => {
+    await logOut();
+  };
+
+  const registerNewUser = async (id: string, pass: string, name: string, role: UserRole) => {
+    let cred;
+    try {
+      cred = await registerWithId(id, pass);
+    } catch (error) {
+      // Auth registration failed
+      throw error;
+    }
+
+    try {
+      const profile: UserProfile = {
+        uid: cred.user.uid,
+        name,
+        role,
+        employeeId: id,
+        createdAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, 'users', cred.user.uid), profile);
+      setUserProfile(profile);
+      setSystemHasUsers(true);
+    } catch (error) {
+      // Firestore profile creation failed - the user is in Auth but not DB.
+      // We should attempt to delete the Auth user to allow retry.
+      try {
+        await cred.user.delete();
+      } catch (deleteError) {
+        console.error("Failed to rollback Auth user after Firestore failure:", deleteError);
+      }
+      handleFirestoreError(error, OperationType.WRITE, 'users');
+      throw error;
+    }
+  };
 
   useEffect(() => {
     if (!currentUser) {
@@ -65,7 +154,7 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
 
     const patientsRef = query(
       collection(db, 'patients'), 
-      where('hospitalId', '==', 'default')
+      orderBy('createdAt', 'desc')
     );
     const unsubscribePatients = onSnapshot(patientsRef, (snapshot) => {
       const patientList = snapshot.docs.map(doc => {
@@ -81,7 +170,6 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
 
     const visitsQuery = query(
       collection(db, 'visits'), 
-      where('hospitalId', '==', 'default'),
       orderBy('createdAt', 'desc')
     );
     const unsubscribeVisits = onSnapshot(visitsQuery, (snapshot) => {
@@ -110,9 +198,7 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
       const newPatient = {
         ...data,
         middleName: data.middleName || null,
-        ownerId: auth.currentUser?.uid,
-        hospitalId: 'default',
-        createdAt: serverTimestamp(),
+        createdAt: new Date().toISOString(),
       };
       await setDoc(doc(db, 'patients', mrn), newPatient);
       return { id: mrn, ...newPatient } as unknown as Patient;
@@ -128,7 +214,6 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
     try {
       const newVisit = {
         patientId,
-        hospitalId: 'default',
         status: 'Booked' as VisitStatus,
         currentDepartment: 'Reception' as Department,
         token: `T-${Math.floor(100 + Math.random() * 900)}`,
@@ -138,8 +223,8 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
         soapNotes: null,
         diagnosis: null,
         scheduledDate: null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
       await setDoc(doc(db, 'visits', visitId), newVisit);
       return { id: visitId, ...newVisit } as unknown as Visit;
@@ -155,7 +240,6 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
     try {
       const newVisit = {
         patientId,
-        hospitalId: 'default',
         status: 'Waiting' as VisitStatus,
         currentDepartment: 'Doctor' as Department,
         token: `F-${Math.floor(100 + Math.random() * 900)}`,
@@ -165,8 +249,8 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
         soapNotes: null,
         diagnosis: null,
         scheduledDate: date,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
       await setDoc(doc(db, 'visits', visitId), newVisit);
       return { id: visitId, ...newVisit } as unknown as Visit;
@@ -182,7 +266,7 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
       await updateDoc(doc(db, 'visits', visitId), {
         status,
         currentDepartment: nextDept || activeDepartment,
-        updatedAt: serverTimestamp()
+        updatedAt: new Date().toISOString()
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
@@ -194,7 +278,7 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
     try {
       await updateDoc(doc(db, 'visits', visitId), {
         vitals,
-        updatedAt: serverTimestamp()
+        updatedAt: new Date().toISOString()
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
@@ -207,7 +291,7 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
       await updateDoc(doc(db, 'visits', visitId), {
         soapNotes: soap,
         diagnosis: diagnosis || null,
-        updatedAt: serverTimestamp()
+        updatedAt: new Date().toISOString()
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
@@ -225,7 +309,7 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
       };
       await updateDoc(doc(db, 'visits', visitId), {
         orders: arrayUnion(newOrder),
-        updatedAt: serverTimestamp()
+        updatedAt: new Date().toISOString()
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
@@ -246,7 +330,7 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
       
       await updateDoc(doc(db, 'visits', visitId), {
         orders: newOrders,
-        updatedAt: serverTimestamp()
+        updatedAt: new Date().toISOString()
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
@@ -258,7 +342,7 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
     try {
       await updateDoc(doc(db, 'visits', visitId), {
         isPaid: true,
-        updatedAt: serverTimestamp()
+        updatedAt: new Date().toISOString()
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
@@ -270,7 +354,7 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
     try {
       await updateDoc(doc(db, 'visits', visitId), {
         status: 'Cancelled',
-        updatedAt: serverTimestamp()
+        updatedAt: new Date().toISOString()
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
@@ -284,7 +368,7 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
         vitals,
         status: 'Waiting' as VisitStatus,
         currentDepartment: nextDept,
-        updatedAt: serverTimestamp()
+        updatedAt: new Date().toISOString()
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
@@ -313,11 +397,36 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const provisionUserProfile = async (name: string, role: UserRole) => {
+    if (!currentUser) throw new Error("No authenticated user found.");
+    
+    // Extract employeeId from email if possible
+    const employeeId = currentUser.email?.split('@')[0] || 'unknown';
+
+    try {
+      const profile: UserProfile = {
+        uid: currentUser.uid,
+        name,
+        role,
+        employeeId,
+        createdAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, 'users', currentUser.uid), profile);
+      setUserProfile(profile);
+      setSystemHasUsers(true);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'users');
+      throw error;
+    }
+  };
+
   return (
     <HMSContext.Provider value={{
-      patients, visits, activeDepartment, showDashboard, currentUser, isAuthReady, setActiveDepartment, setShowDashboard,
+      patients, visits, activeDepartment, showDashboard, currentUser, userProfile, isAuthReady, systemHasUsers,
+      setActiveDepartment, setShowDashboard,
       registerPatient, createVisit, createFollowUp, updateVisitStatus,
-      updateVitals, updateSOAP, addOrder, updateOrder, markPaid, deactivateVisit, saveVitalsAndTransfer, clearAllData
+      updateVitals, updateSOAP, addOrder, updateOrder, markPaid, deactivateVisit, saveVitalsAndTransfer, clearAllData,
+      login, registerNewUser, logout, provisionUserProfile
     }}>
       {children}
     </HMSContext.Provider>
