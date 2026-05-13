@@ -34,6 +34,7 @@ export interface Order {
   id: string;
   type: 'Laboratory' | 'Radiology' | 'Pharmacy';
   description: string;
+  selectedTests?: string[];
   status: 'Ordered' | 'Ready' | 'Dispensed' | 'Completed' | 'Pending';
   results?: string;
   timestamp: string;

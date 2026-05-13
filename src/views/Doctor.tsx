@@ -10,11 +10,17 @@ import {
   Thermometer,
   Shield,
   HeartPulse,
-  Weight
+  Weight,
+  Search,
+  Filter,
+  Beaker,
+  X,
+  Send
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
+import { LAB_TESTS } from '../constants/labTests';
 
 export function Doctor() {
   const { visits, patients, updateSOAP, updateVisitStatus, addOrder, createFollowUp } = useHMS();
@@ -36,6 +42,8 @@ export function Doctor() {
   const [showFollowUpPicker, setShowFollowUpPicker] = useState(false);
   const [followUpDate, setFollowUpDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [labSearch, setLabSearch] = useState('');
+  const [selectedLabTests, setSelectedLabTests] = useState<string[]>([]);
 
   const activeVisits = visits.filter(v => v.currentDepartment === 'Doctor' && v.status !== 'Complete' && v.status !== 'Cancelled');
   const nursingQueue = visits.filter(v => v.currentDepartment === 'Nurse' && v.status !== 'Complete' && v.status !== 'Cancelled');
@@ -50,10 +58,31 @@ export function Doctor() {
   };
 
   const handleAddOrder = async () => {
-    if (!selectedVisit || !orderDesc) return;
-    await addOrder(selectedVisit.id, { type: selectedOrderType, description: orderDesc });
-    setOrderDesc('');
+    if (!selectedVisit) return;
+    
+    if (selectedOrderType === 'Laboratory' && selectedLabTests.length > 0) {
+      await addOrder(selectedVisit.id, { 
+        type: 'Laboratory', 
+        description: selectedLabTests.join(', '),
+        selectedTests: selectedLabTests
+      });
+      setSelectedLabTests([]);
+      setLabSearch('');
+    } else if (orderDesc) {
+      await addOrder(selectedVisit.id, { type: selectedOrderType, description: orderDesc });
+      setOrderDesc('');
+    }
   };
+
+  const toggleLabTest = (test: string) => {
+    setSelectedLabTests(prev => 
+      prev.includes(test) ? prev.filter(t => t !== test) : [...prev, test]
+    );
+  };
+
+  const filteredLabTests = LAB_TESTS.filter(test => 
+    test.toLowerCase().includes(labSearch.toLowerCase())
+  ).slice(0, 15);
 
   const concludeVisit = async (requireFollowUp: boolean) => {
     if (!selectedVisit || !selectedPatient) return;
@@ -320,37 +349,114 @@ export function Doctor() {
                     {activeTab === 'orders' && (
                        <div className="space-y-6 pb-8">
                           <div className="bento-card p-6 border-brand-blue/10 bg-slate-50/50">
-                             <div className="flex gap-2 mb-4">
+                             <div className="flex gap-2 mb-6">
                                {['Laboratory', 'Radiology'].map(type => (
                                  <button
                                    key={type}
                                    onClick={() => setSelectedOrderType(type as 'Laboratory' | 'Radiology')}
                                    className={cn(
-                                     "flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
+                                     "flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-2",
                                      selectedOrderType === type 
-                                       ? "bg-brand-blue text-white border-transparent" 
+                                       ? "bg-brand-blue text-white border-transparent shadow-lg shadow-brand-blue/20" 
                                        : "bg-white text-slate-400 border-slate-100 hover:border-brand-blue/30"
                                    )}
                                  >
+                                   {type === 'Laboratory' ? <Beaker className="w-3 h-3" /> : <Activity className="w-3 h-3" />}
                                    {type}
                                  </button>
                                ))}
                              </div>
-                             <div className="flex gap-4">
-                               <input 
-                                 value={orderDesc}
-                                 onChange={e => setOrderDesc(e.target.value)}
-                                 placeholder={`Specify ${selectedOrderType} details...`}
-                                 className="flex-1 px-5 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-brand-blue outline-none transition-all"
-                               />
-                               <button 
-                                 onClick={handleAddOrder}
-                                 disabled={!orderDesc}
-                                 className="px-6 py-3 bg-brand-blue text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-brand-blue/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-blue/20"
-                               >
-                                 Push Order
-                               </button>
-                             </div>
+
+                             {selectedOrderType === 'Laboratory' ? (
+                               <div className="space-y-6">
+                                 {/* Selected Tests Buffer (Bento Style) */}
+                                 <div className="flex flex-wrap gap-2 min-h-[40px] p-3 bg-white/50 border border-dashed border-brand-blue/20 rounded-2xl">
+                                   {selectedLabTests.map(test => (
+                                     <motion.span 
+                                       layout
+                                       initial={{ scale: 0.8, opacity: 0 }}
+                                       animate={{ scale: 1, opacity: 1 }}
+                                       key={test} 
+                                       className="px-3 py-1.5 bg-brand-blue text-white text-[10px] font-black rounded-full uppercase tracking-tight flex items-center gap-2 shadow-sm"
+                                     >
+                                       {test}
+                                       <button onClick={() => toggleLabTest(test)} className="hover:text-red-200"><X className="w-3 h-3" /></button>
+                                     </motion.span>
+                                   ))}
+                                   {selectedLabTests.length === 0 && (
+                                     <p className="text-[10px] font-bold text-slate-400 italic flex items-center gap-2">
+                                       <Filter className="w-3 h-3" /> جاري اختيار الفحوصات...
+                                     </p>
+                                   )}
+                                 </div>
+
+                                 {/* Search & Suggestions */}
+                                 <div className="relative">
+                                    <div className="relative">
+                                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                      <input 
+                                        value={labSearch}
+                                        onChange={e => setLabSearch(e.target.value)}
+                                        placeholder="ابحث عن الفحص المخبري... Search for test"
+                                        className="w-full pl-12 pr-4 py-4 bg-white border border-slate-100 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-brand-blue outline-none transition-all shadow-sm"
+                                      />
+                                    </div>
+
+                                    {labSearch && (
+                                      <motion.div 
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden max-h-[300px] overflow-y-auto custom-scrollbar"
+                                      >
+                                        {filteredLabTests.map(test => (
+                                          <button
+                                            key={test}
+                                            onClick={() => {
+                                              toggleLabTest(test);
+                                              setLabSearch('');
+                                            }}
+                                            className="w-full px-6 py-4 text-left text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center justify-between group border-b border-slate-50 last:border-0"
+                                          >
+                                            <span className="uppercase tracking-tight italic">{test}</span>
+                                            <Plus className="w-3 h-3 text-brand-blue opacity-0 group-hover:opacity-100" />
+                                          </button>
+                                        ))}
+                                        {filteredLabTests.length === 0 && (
+                                          <div className="p-8 text-center text-slate-400 italic text-[10px] font-black uppercase tracking-widest">
+                                            لم يتم العثور على نتائج // NO RESULTS
+                                          </div>
+                                        )}
+                                      </motion.div>
+                                    )}
+                                 </div>
+
+                                 <button 
+                                   onClick={handleAddOrder}
+                                   disabled={selectedLabTests.length === 0}
+                                   className="w-full py-4 bg-brand-blue text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:grayscale transition-all shadow-xl shadow-brand-blue/20 flex items-center justify-center gap-3"
+                                 >
+                                   <Send className="w-4 h-4" />
+                                   إرسال الفحوصات للمختبر // SEND TO LABORATORY
+                                 </button>
+                               </div>
+                             ) : (
+                               <div className="flex gap-4">
+                                 <input 
+                                   value={orderDesc}
+                                   onChange={e => setOrderDesc(e.target.value)}
+                                   placeholder={`Specify ${selectedOrderType} details...`}
+                                   className="flex-1 px-5 py-4 bg-white border border-slate-200 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-brand-blue outline-none transition-all shadow-sm"
+                                 />
+                                 <button 
+                                   onClick={handleAddOrder}
+                                   disabled={!orderDesc}
+                                   className="px-8 py-4 bg-brand-blue text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-brand-blue/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-blue/20 flex items-center gap-2"
+                                 >
+                                   <Send className="w-4 h-4" />
+                                   PUSH
+                                 </button>
+                               </div>
+                             )}
                           </div>
                           
                           <div className="grid grid-cols-2 gap-4">
