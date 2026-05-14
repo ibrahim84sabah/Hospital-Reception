@@ -4,6 +4,15 @@ export type Department = 'Reception' | 'Nurse' | 'Doctor' | 'Lab' | 'Radiology' 
 
 export type UserRole = 'Admin' | 'Doctor' | 'Nurse' | 'Staff';
 
+export interface LabTestMetadata {
+  name: string;
+  section: string;
+  parameter: string;
+  range: string;
+  unit: string;
+  specimen: string;
+}
+
 export interface UserProfile {
   uid: string;
   name: string;
@@ -35,6 +44,7 @@ export interface Order {
   type: 'Laboratory' | 'Radiology' | 'Pharmacy';
   description: string;
   selectedTests?: string[];
+  testResults?: Record<string, string>;
   status: 'Ordered' | 'Ready' | 'Dispensed' | 'Completed' | 'Pending';
   results?: string;
   timestamp: string;

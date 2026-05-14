@@ -9,10 +9,13 @@ import {
   Clock, 
   Shield,
   Search,
-  ChevronRight
+  ChevronRight,
+  ClipboardList
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
+import { LAB_TESTS_METADATA } from '../constants/labTests';
+import { LabReportTemplate } from '../components/LabReportTemplate';
 
 export function LabRadiology() {
   const { visits, patients, updateOrder, updateVisitStatus, activeDepartment } = useHMS();
@@ -22,6 +25,7 @@ export function LabRadiology() {
   const selectedVisitData = selectedVisit && selectedPatient ? { visit: selectedVisit, patient: selectedPatient } : null;
 
   const [resultText, setResultText] = useState('');
+  const [structuredLabResults, setStructuredLabResults] = useState<Record<string, string>>({});
 
   const activeVisits = visits.filter(v => 
     v.status !== 'Complete' && v.status !== 'Cancelled' && 
@@ -40,14 +44,19 @@ export function LabRadiology() {
   ) || [];
 
   const handleProcessOrder = async (order: Order) => {
-    if (!selectedVisit || !resultText) return;
+    if (!selectedVisit) return;
+    
+    // For Radiology or if no specific lab tests were picked, we need resultText
+    if (order.type !== 'Laboratory' && !resultText) return;
     
     await updateOrder(selectedVisit.id, order.id, {
       status: 'Completed',
-      results: resultText
+      results: resultText,
+      testResults: order.type === 'Laboratory' ? structuredLabResults : undefined
     });
 
     setResultText('');
+    setStructuredLabResults({});
 
     // Check if ALL orders of the CURRENT department type are done
     const allDeptDone = selectedVisit.orders
@@ -190,28 +199,83 @@ export function LabRadiology() {
                      </div>
                      
                      {order.status !== 'Completed' ? (
-                       <div className="space-y-4 pt-4 border-t border-slate-200/50">
-                         <textarea 
-                           value={resultText}
-                           onChange={e => setResultText(e.target.value)}
-                           placeholder="Enter technical findings..."
-                           className="w-full h-32 p-4 bg-white border border-slate-200 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-brand-blue outline-none transition-all resize-none"
-                         />
-                         <button 
-                           onClick={() => handleProcessOrder(order)}
-                           disabled={!resultText}
-                           className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-                         >
-                           <Upload className="w-4 h-4" />
-                           Execute Final Report
-                         </button>
-                       </div>
-                     ) : (
-                       <div className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-100">
-                         <p className="text-[10px] font-black uppercase text-emerald-600 mb-2">Findings Repository</p>
-                         <p className="text-xs font-bold text-slate-700 italic leading-relaxed">{order.results}</p>
-                       </div>
-                     )}
+                        <div className="space-y-6 pt-4 border-t border-slate-200/50">
+                          {order.type === 'Laboratory' && order.selectedTests && order.selectedTests.length > 0 ? (
+                            <div className="space-y-4">
+                              <p className="text-[10px] font-black uppercase text-slate-400 mb-2 italic flex items-center gap-2">
+                                <ClipboardList className="w-3 h-3" /> Technical Entry Panel
+                              </p>
+                              <div className="overflow-hidden rounded-2xl border border-slate-100">
+                                <table className="w-full text-left text-xs">
+                                  <thead>
+                                    <tr className="bg-slate-50 border-b border-slate-100">
+                                      <th className="px-4 py-3 font-black text-[9px] uppercase tracking-widest text-slate-500">Test Parameter</th>
+                                      <th className="px-4 py-3 font-black text-[9px] uppercase tracking-widest text-slate-500">Normal Range</th>
+                                      <th className="px-4 py-3 font-black text-[9px] uppercase tracking-widest text-slate-500 w-32">Result</th>
+                                      <th className="px-4 py-3 font-black text-[9px] uppercase tracking-widest text-slate-500">Unit</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="bg-white">
+                                    {order.selectedTests.map(testName => {
+                                      const meta = LAB_TESTS_METADATA.find(m => m.name === testName);
+                                      return (
+                                        <tr key={testName} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
+                                          <td className="px-4 py-3">
+                                            <p className="font-bold text-slate-700">{testName}</p>
+                                            <p className="text-[8px] text-slate-400 uppercase font-mono">{meta?.specimen || 'Serum'}</p>
+                                          </td>
+                                          <td className="px-4 py-3">
+                                            <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold">{meta?.range || '--'}</span>
+                                          </td>
+                                          <td className="px-4 py-3">
+                                             <input 
+                                                type="text"
+                                                value={structuredLabResults[testName] || ''}
+                                                onChange={e => setStructuredLabResults(prev => ({ ...prev, [testName]: e.target.value }))}
+                                                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-xs font-black focus:ring-1 focus:ring-brand-blue outline-none"
+                                                placeholder="Value..."
+                                             />
+                                          </td>
+                                          <td className="px-4 py-3 text-[10px] font-bold text-slate-400">{meta?.unit || '--'}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                              <textarea 
+                                value={resultText}
+                                onChange={e => setResultText(e.target.value)}
+                                placeholder="General summary or notes..."
+                                className="w-full h-20 p-4 bg-white border border-slate-200 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-brand-blue outline-none transition-all resize-none shadow-inner"
+                              />
+                            </div>
+                          ) : (
+                            <textarea 
+                              value={resultText}
+                              onChange={e => setResultText(e.target.value)}
+                              placeholder="Enter technical findings..."
+                              className="w-full h-32 p-4 bg-white border border-slate-200 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-brand-blue outline-none transition-all resize-none"
+                            />
+                          )}
+                          <button 
+                            onClick={() => handleProcessOrder(order)}
+                            disabled={order.type === 'Laboratory' && order.selectedTests ? Object.keys(structuredLabResults).length === 0 : !resultText}
+                            className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-xl"
+                          >
+                            <Upload className="w-4 h-4" />
+                            Finalize {order.type} Report
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <LabReportTemplate 
+                            patient={selectedVisitData.patient} 
+                            visit={selectedVisitData.visit} 
+                            order={order} 
+                          />
+                        </div>
+                      )}
                   </div>
                 ))}
               </div>
