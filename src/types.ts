@@ -19,6 +19,7 @@ export interface UserProfile {
   role: UserRole;
   employeeId: string;
   createdAt: string;
+  associatedDoctorId?: string;
 }
 
 export interface Vitals {
@@ -85,6 +86,7 @@ export interface Visit {
   vitals?: Vitals | null;
   soapNotes?: SOAPNotes | null;
   diagnosis?: string | null;
+  assignedDoctorId?: string | null;
   orders: Order[];
   isPaid: boolean;
   scheduledDate?: string | null;

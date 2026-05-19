@@ -12,7 +12,8 @@ import {
   where,
   getDocs,
   getDoc,
-  limit
+  limit,
+  deleteDoc
 } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth, handleFirestoreError, OperationType, logOut, loginWithId, registerWithId } from '../lib/firebase';
@@ -25,13 +26,15 @@ interface HMSContextType {
   showDashboard: boolean;
   currentUser: User | null;
   userProfile: UserProfile | null;
+  doctors: UserProfile[];
+  allUsers: UserProfile[];
   isAuthReady: boolean;
   systemHasUsers: boolean;
   setActiveDepartment: (dept: Department) => void;
   setShowDashboard: (show: boolean) => void;
   registerPatient: (patient: Omit<Patient, 'id' | 'createdAt'>) => Promise<Patient>;
-  createVisit: (patientId: string) => Promise<Visit>;
-  createFollowUp: (patientId: string, date: string) => Promise<Visit>;
+  createVisit: (patientId: string, doctorId?: string) => Promise<Visit>;
+  createFollowUp: (patientId: string, date: string, doctorId?: string) => Promise<Visit>;
   updateVisitStatus: (visitId: string, status: VisitStatus, nextDept?: Department) => Promise<void>;
   updateVitals: (visitId: string, vitals: Visit['vitals']) => Promise<void>;
   updateSOAP: (visitId: string, soap: Visit['soapNotes'], diagnosis?: string) => Promise<void>;
@@ -42,9 +45,11 @@ interface HMSContextType {
   saveVitalsAndTransfer: (visitId: string, vitals: Visit['vitals'], nextDept: Department) => Promise<void>;
   clearAllData: () => Promise<void>;
   login: (id: string, pass: string) => Promise<void>;
-  registerNewUser: (id: string, pass: string, name: string, role: UserRole) => Promise<void>;
+  registerNewUser: (id: string, pass: string, name: string, role: UserRole, associatedDoctorId?: string) => Promise<void>;
+  updateUserProfile: (uid: string, updates: Partial<UserProfile>) => Promise<void>;
+  deleteUserProfile: (uid: string) => Promise<void>;
   logout: () => Promise<void>;
-  provisionUserProfile: (name: string, role: UserRole) => Promise<void>;
+  provisionUserProfile: (name: string, role: UserRole, associatedDoctorId?: string) => Promise<void>;
 }
 
 const HMSContext = createContext<HMSContextType | undefined>(undefined);
@@ -52,6 +57,8 @@ const HMSContext = createContext<HMSContextType | undefined>(undefined);
 export function HMSProvider({ children }: { children: React.ReactNode }) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [visits, setVisits] = useState<Visit[]>([]);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [doctors, setDoctors] = useState<UserProfile[]>([]);
   const [activeDepartment, setActiveDepartment] = useState<Department>('Reception');
   const [showDashboard, setShowDashboard] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -112,7 +119,7 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
     await logOut();
   };
 
-  const registerNewUser = async (id: string, pass: string, name: string, role: UserRole) => {
+  const registerNewUser = async (id: string, pass: string, name: string, role: UserRole, associatedDoctorId?: string) => {
     let cred;
     try {
       cred = await registerWithId(id, pass);
@@ -120,14 +127,15 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
       // Auth registration failed
       throw error;
     }
-
+ 
     try {
       const profile: UserProfile = {
         uid: cred.user.uid,
         name,
         role,
         employeeId: id,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        associatedDoctorId: associatedDoctorId || null
       };
       await setDoc(doc(db, 'users', cred.user.uid), profile);
       setUserProfile(profile);
@@ -191,6 +199,30 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
     };
   }, [currentUser]);
 
+  // Fetch All Users & Segment Doctors
+  useEffect(() => {
+    if (!currentUser) {
+      setAllUsers([]);
+      setDoctors([]);
+      return;
+    }
+    
+    // We fetch ALL users if the user is signed in. Rules allow list: if isSignedIn().
+    // This simplifies the UI for searches and admin panels.
+    const usersQuery = query(collection(db, 'users'), orderBy('name'));
+    const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
+      const userList = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        uid: doc.id // Ensure UID is always synced with Doc ID
+      })) as UserProfile[];
+      
+      setAllUsers(userList);
+      setDoctors(userList.filter(u => u.role === 'Doctor'));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
+
+    return () => unsubscribeUsers();
+  }, [currentUser]);
+
   const registerPatient = async (data: Omit<Patient, 'id' | 'createdAt'>) => {
     const mrn = `MRN-${Math.floor(1000 + Math.random() * 9000)}`;
     const path = `patients/${mrn}`;
@@ -208,7 +240,7 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const createVisit = async (patientId: string) => {
+  const createVisit = async (patientId: string, doctorId?: string) => {
     const visitId = `CR-${Math.floor(1000 + Math.random() * 9000)}`;
     const path = `visits/${visitId}`;
     try {
@@ -216,6 +248,7 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
         patientId,
         status: 'Booked' as VisitStatus,
         currentDepartment: 'Reception' as Department,
+        assignedDoctorId: doctorId || null,
         token: `T-${Math.floor(100 + Math.random() * 900)}`,
         orders: [],
         isPaid: false,
@@ -234,7 +267,7 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const createFollowUp = async (patientId: string, date: string) => {
+  const createFollowUp = async (patientId: string, date: string, doctorId?: string) => {
     const visitId = `CR-${Math.floor(1000 + Math.random() * 9000)}`;
     const path = `visits/${visitId}`;
     try {
@@ -242,6 +275,7 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
         patientId,
         status: 'Waiting' as VisitStatus,
         currentDepartment: 'Doctor' as Department,
+        assignedDoctorId: doctorId || null,
         token: `F-${Math.floor(100 + Math.random() * 900)}`,
         orders: [],
         isPaid: false,
@@ -397,7 +431,7 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const provisionUserProfile = async (name: string, role: UserRole) => {
+  const provisionUserProfile = async (name: string, role: UserRole, associatedDoctorId?: string) => {
     if (!currentUser) throw new Error("No authenticated user found.");
     
     // Extract employeeId from email if possible
@@ -409,7 +443,8 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
         name,
         role,
         employeeId,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        associatedDoctorId: associatedDoctorId || null
       };
       await setDoc(doc(db, 'users', currentUser.uid), profile);
       setUserProfile(profile);
@@ -420,13 +455,35 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateUserProfile = async (uid: string, updates: Partial<UserProfile>) => {
+    try {
+      // Sanitize updates - Firestore doesn't allow undefined values
+      const sanitizedUpdates = Object.fromEntries(
+        Object.entries(updates).filter(([_, v]) => v !== undefined)
+      );
+      await updateDoc(doc(db, 'users', uid), sanitizedUpdates);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'users');
+      throw error;
+    }
+  };
+
+  const deleteUserProfile = async (uid: string) => {
+    try {
+      await deleteDoc(doc(db, 'users', uid));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'users');
+      throw error;
+    }
+  };
+
   return (
     <HMSContext.Provider value={{
-      patients, visits, activeDepartment, showDashboard, currentUser, userProfile, isAuthReady, systemHasUsers,
+      patients, visits, doctors, allUsers, activeDepartment, showDashboard, currentUser, userProfile, isAuthReady, systemHasUsers,
       setActiveDepartment, setShowDashboard,
       registerPatient, createVisit, createFollowUp, updateVisitStatus,
       updateVitals, updateSOAP, addOrder, updateOrder, markPaid, deactivateVisit, saveVitalsAndTransfer, clearAllData,
-      login, registerNewUser, logout, provisionUserProfile
+      login, registerNewUser, updateUserProfile, deleteUserProfile, logout, provisionUserProfile
     }}>
       {children}
     </HMSContext.Provider>

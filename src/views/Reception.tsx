@@ -6,9 +6,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 
 export function Reception() {
-  const { registerPatient, createVisit, patients, visits, updateVisitStatus, deactivateVisit } = useHMS();
+  const { registerPatient, createVisit, patients, visits, doctors, updateVisitStatus, deactivateVisit } = useHMS();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
   const [formData, setFormData] = useState({
     firstName: '',
     middleName: '',
@@ -21,8 +22,9 @@ export function Reception() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     const patient = await registerPatient(formData);
-    await createVisit(patient.id);
+    await createVisit(patient.id, selectedDoctorId || undefined);
     setFormData({ firstName: '', middleName: '', lastName: '', dob: '', gender: 'Male', mobile: '' });
+    setSelectedDoctorId('');
   };
 
   const filteredPatients = searchQuery.length > 2 
@@ -35,41 +37,93 @@ export function Reception() {
 
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
 
-  const handlePatientClick = async (patient: Patient, activeVisit: Visit | undefined) => {
+  const handlePatientClick = (patient: Patient, activeVisit: Visit | undefined) => {
     if (activeVisit) {
       if (selectedPatientId === patient.id) {
         if (confirmCancelId === patient.id) {
-          // Final confirmation to deactivate
-          try {
-            await deactivateVisit(activeVisit.id);
+          deactivateVisit(activeVisit.id).then(() => {
             setConfirmCancelId(null);
             setSelectedPatientId(null);
-          } catch {
-            alert("حدث خطأ أثناء محاولة إزالة المريض من القائمة");
-          }
+          });
         } else {
-          // First click on an already selected active patient -> show cancel confirmation
           setConfirmCancelId(patient.id);
         }
       } else {
-        // Just selecting the patient to see details/forwarding options
         setSelectedPatientId(patient.id);
         setConfirmCancelId(null);
       }
     } else {
-      // No active visit -> Create one
-      try {
-        await createVisit(patient.id);
-        setSelectedPatientId(patient.id);
-        setConfirmCancelId(null);
-      } catch (err) {
-        console.error("Failed to create visit:", err);
-      }
+      // Just select the patient to show "Start Visit" UI
+      setSelectedPatientId(patient.id === selectedPatientId ? null : patient.id);
+      setConfirmCancelId(null);
+    }
+  };
+
+  const handleStartExistingVisit = async (patientId: string) => {
+    try {
+      await createVisit(patientId, selectedDoctorId || undefined);
+      // Reset selected doctor after creation
+      setSelectedDoctorId('');
+      setSelectedPatientId(null);
+    } catch (err) {
+      console.error("Failed to create visit:", err);
     }
   };
 
   const activeVisits = visits.filter(v => v.status !== 'Complete' && v.status !== 'Cancelled');
   const activeReceptionVisits = activeVisits.filter(v => v.currentDepartment === 'Reception');
+
+  const PatientQueueCard = ({ visit, patient }: { visit: Visit, patient: Patient }) => (
+    <motion.div 
+      layout
+      initial={{ x: 20, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      exit={{ x: -20, opacity: 0 }}
+      className="p-4 bg-slate-50 border border-slate-100 rounded-2xl relative group"
+    >
+      <div className="flex justify-between items-start mb-1">
+        <span className="text-[8px] font-mono font-black text-slate-400 uppercase tracking-widest">{visit.token}</span>
+        <div className="flex gap-1">
+          <button 
+            onClick={() => updateVisitStatus(visit.id, 'Waiting', 'Nurse')}
+            title="Forward to Nursing"
+            className="w-6 h-6 rounded bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-brand-blue hover:border-brand-blue transition-all"
+          >
+            <Activity className="w-3.5 h-3.5" />
+          </button>
+          <button 
+            onClick={() => updateVisitStatus(visit.id, 'Waiting', 'Doctor')}
+            title="Forward to Doctor"
+            className="w-6 h-6 rounded bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-brand-blue hover:border-brand-blue transition-all"
+          >
+            <Stethoscope className="w-3.5 h-3.5" />
+          </button>
+          <button 
+            onClick={async () => {
+              if (window.confirm(`إزالة ${patient.firstName} من قائمة الانتظار؟`)) {
+                await deactivateVisit(visit.id);
+              }
+            }}
+            title="Remove from Queue"
+            className="w-6 h-6 rounded bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-500 transition-all"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+      <h4 className="text-[10px] font-black uppercase tracking-tight truncate">{patient.firstName} {patient.lastName}</h4>
+      <div className="flex items-center justify-between mt-1">
+        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Logged: Just Now</p>
+        {visit.assignedDoctorId && (
+          <span className="text-[8px] font-black text-brand-blue uppercase tracking-widest italic flex items-center gap-1">
+            <div className="w-1 h-1 rounded-full bg-brand-blue animate-pulse" />
+            Dr. {doctors.find(d => d.uid === visit.assignedDoctorId)?.name || 'Ahmed'}
+          </span>
+        )}
+      </div>
+      <div className="absolute right-0 top-0 bottom-0 w-1 bg-brand-blue rounded-r-lg opacity-0 group-hover:opacity-100 transition-opacity" />
+    </motion.div>
+  );
 
   return (
     <div className="grid grid-cols-12 gap-6 h-full p-2">
@@ -161,6 +215,45 @@ export function Reception() {
                   </div>
 
                   <AnimatePresence>
+                    {selectedPatientId === patient.id && !activeVisit && (
+                      <motion.div 
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="pt-4 mt-4 border-t border-slate-100 space-y-4">
+                          <div className="space-y-1.5">
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic">Assign Doctor / اختيار الطبيب</label>
+                            <select 
+                              value={selectedDoctorId}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                setSelectedDoctorId(e.target.value);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-[9px] font-black uppercase outline-none focus:ring-1 focus:ring-brand-blue"
+                            >
+                              <option value="">Next Available / أي طبيب</option>
+                              {doctors.map(d => (
+                                <option key={d.uid} value={d.uid}>Dr. {d.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStartExistingVisit(patient.id);
+                            }}
+                            className="w-full flex items-center justify-center gap-2 py-3 bg-brand-dark text-white rounded-xl hover:bg-slate-800 transition-all active:scale-[0.98]"
+                          >
+                            <Activity className="w-3.5 h-3.5" />
+                            <span className="text-[9px] font-black uppercase tracking-widest">Start New Visit</span>
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+
                     {selectedPatientId === patient.id && activeVisit && (
                       <motion.div 
                         initial={{ height: 0, opacity: 0 }}
@@ -298,6 +391,22 @@ export function Reception() {
                   </div>
                </div>
 
+               <div className="col-span-2 space-y-2 mt-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 italic">Assign Doctor // الطبيب المطلوب</label>
+                  <select 
+                    value={selectedDoctorId}
+                    onChange={e => setSelectedDoctorId(e.target.value)}
+                    className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-black uppercase tracking-widest focus:bg-white focus:ring-2 focus:ring-brand-blue outline-none transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="">Next Available / الطبيب التالي</option>
+                    {doctors.map(doc => (
+                      <option key={doc.uid} value={doc.uid}>
+                        Dr. {doc.name}
+                      </option>
+                    ))}
+                  </select>
+               </div>
+
                <div className="col-span-2 mt-auto pt-8">
                   <button 
                     type="submit"
@@ -343,59 +452,53 @@ export function Reception() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4">
-              <AnimatePresence mode="popLayout">
-                {activeReceptionVisits.map(visit => {
-                  const patient = patients.find(p => p.id === visit.patientId);
-                  if (!patient) return null;
-                  return (
-                    <motion.div 
-                      key={visit.id}
-                      layout
-                      initial={{ x: 20, opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
-                      exit={{ x: -20, opacity: 0 }}
-                      className="p-4 bg-slate-50 border border-slate-100 rounded-2xl relative group"
-                    >
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="text-[8px] font-mono font-black text-slate-400 uppercase tracking-widest">{visit.token}</span>
-                        <div className="flex gap-1">
-                          <button 
-                            onClick={() => updateVisitStatus(visit.id, 'Waiting', 'Nurse')}
-                            title="Forward to Nursing"
-                            className="w-6 h-6 rounded bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-brand-blue hover:border-brand-blue transition-all"
-                          >
-                            <Activity className="w-3.5 h-3.5" />
-                          </button>
-                          <button 
-                            onClick={() => updateVisitStatus(visit.id, 'Waiting', 'Doctor')}
-                            title="Forward to Doctor"
-                            className="w-6 h-6 rounded bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-brand-blue hover:border-brand-blue transition-all"
-                          >
-                            <Stethoscope className="w-3.5 h-3.5" />
-                          </button>
-                          <button 
-                            onClick={async () => {
-                              if (window.confirm(`إزالة ${patient.firstName} من قائمة الانتظار؟`)) {
-                                await deactivateVisit(visit.id);
-                              }
-                            }}
-                            title="Remove from Queue"
-                            className="w-6 h-6 rounded bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-500 transition-all"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6">
+              {/* Unassigned / Next Available */}
+              {(activeReceptionVisits.filter(v => !v.assignedDoctorId).length > 0) && (
+                <div className="p-4 bg-white border border-slate-100 rounded-3xl shadow-sm space-y-4">
+                   <div className="flex items-center justify-between px-1">
+                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Next Available / عام</span>
+                     <span className="px-2 py-0.5 bg-slate-50 text-[9px] font-black text-slate-400 rounded-full">{activeReceptionVisits.filter(v => !v.assignedDoctorId).length}</span>
+                   </div>
+                   <div className="space-y-3">
+                     {activeReceptionVisits.filter(v => !v.assignedDoctorId).map(visit => {
+                       const patient = patients.find(p => p.id === visit.patientId);
+                       if (!patient) return null;
+                       return (
+                         <PatientQueueCard key={visit.id} visit={visit} patient={patient} />
+                       );
+                     })}
+                   </div>
+                </div>
+              )}
+
+              {/* Grouped by Doctor */}
+              {doctors.map(doctor => {
+                const doctorQueue = activeReceptionVisits.filter(v => v.assignedDoctorId === doctor.uid);
+                if (doctorQueue.length === 0) return null;
+
+                return (
+                  <div key={doctor.uid} className="p-4 bg-white border border-brand-blue/10 rounded-3xl shadow-sm space-y-4">
+                    <div className="flex items-center justify-between px-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-brand-blue" />
+                        <span className="text-[10px] font-black text-brand-blue uppercase tracking-widest italic">Dr. {doctor.name}</span>
                       </div>
-                      <h4 className="text-[10px] font-black uppercase tracking-tight truncate">{patient.firstName} {patient.lastName}</h4>
-                      <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1">Logged: Just Now</p>
-                      
-                      <div className="absolute right-0 top-0 bottom-0 w-1 bg-brand-blue rounded-r-lg opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-              
+                      <span className="px-2 py-0.5 bg-brand-blue/5 text-[9px] font-black text-brand-blue rounded-full">{doctorQueue.length}</span>
+                    </div>
+                    <div className="space-y-3">
+                      {doctorQueue.map(visit => {
+                        const patient = patients.find(p => p.id === visit.patientId);
+                        if (!patient) return null;
+                        return (
+                          <PatientQueueCard key={visit.id} visit={visit} patient={patient} />
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
               {activeReceptionVisits.length === 0 && (
                 <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-40 py-10">
                    <ArrowRight className="w-8 h-8 mb-4 rotate-45" />

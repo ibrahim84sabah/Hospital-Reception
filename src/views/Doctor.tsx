@@ -29,8 +29,31 @@ import { MEDICATIONS } from '../constants/medications';
 import { LabReportTemplate } from '../components/LabReportTemplate';
 
 export function Doctor() {
-  const { visits, patients, updateSOAP, updateVisitStatus, addOrder, createFollowUp } = useHMS();
+  const { visits, patients, updateSOAP, updateVisitStatus, addOrder, createFollowUp, userProfile, doctors } = useHMS();
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
+
+  // Group visits for sidebar
+  const getDoctorQueue = (doctorId: string | null) => {
+    // Enforcement: Doctors only see their own patients
+    if (userProfile?.role === 'Doctor' && doctorId !== userProfile.uid) {
+       return [];
+    }
+    
+    return visits.filter(v => 
+      v.assignedDoctorId === doctorId && 
+      v.currentDepartment === 'Doctor' && 
+      v.status !== 'Complete' && 
+      v.status !== 'Cancelled'
+    );
+  };
+
+  const nursingQueue = visits.filter(v => {
+    const inNurse = v.currentDepartment === 'Nurse' && v.status !== 'Complete' && v.status !== 'Cancelled';
+    if (!inNurse) return false;
+    if (userProfile?.role === 'Doctor') return v.assignedDoctorId === userProfile.uid;
+    return true;
+  });
+
   const selectedVisit = visits.find(v => v.id === selectedVisitId);
   const selectedPatient = selectedVisit ? patients.find(p => p.id === selectedVisit.patientId) : null;
   const selectedVisitData = selectedVisit && selectedPatient ? { visit: selectedVisit, patient: selectedPatient } : null;
@@ -54,9 +77,6 @@ export function Doctor() {
   const [medSearch, setMedSearch] = useState('');
   const [selectedMed, setSelectedMed] = useState<Medication | null>(null);
   const [sig, setSig] = useState(''); // Dosage/Frequency instructions
-
-  const activeVisits = visits.filter(v => v.currentDepartment === 'Doctor' && v.status !== 'Complete' && v.status !== 'Cancelled');
-  const nursingQueue = visits.filter(v => v.currentDepartment === 'Nurse' && v.status !== 'Complete' && v.status !== 'Cancelled');
 
   const patientHistory = selectedVisitData 
     ? visits.filter(v => v.patientId === selectedVisitData.patient.id && v.id !== selectedVisitData.visit.id)
@@ -214,49 +234,112 @@ export function Doctor() {
               <h2 className="text-sm font-black tracking-widest uppercase flex flex-col">
                 <span className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-brand-blue animate-pulse" />
-                  قائمة الانتظار
+                  قائمة العيادات
                 </span>
-                <span className="text-[9px] text-slate-400 opacity-60">Doctor Queue</span>
+                <span className="text-[9px] text-slate-400 opacity-60">Clinic Queues</span>
               </h2>
             </div>
             <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-400">
-              <span className="text-[10px] font-black">{activeVisits.length}</span>
+               <Activity className="w-4 h-4" />
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
-            {activeVisits.map(visit => {
-              const patient = patients.find(p => p.id === visit.patientId);
-              if (!patient) return null;
-              const isSelected = selectedVisitData?.visit.id === visit.id;
-              return (
-                <button
-                  key={visit.id}
-                  onClick={() => handleVisitSelect(visit.id)}
-                  className={cn(
-                    "w-full p-4 rounded-2xl border text-left transition-all duration-300 relative group overflow-hidden",
-                    selectedVisitId === visit.id 
-                      ? "bg-brand-blue border-transparent text-white shadow-[0_10px_30px_rgba(59,130,246,0.25)]" 
-                      : "bg-white border-slate-100 hover:border-brand-blue/30 text-slate-600"
-                  )}
-                >
-                  <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-2">
-                      <span className={cn("text-[9px] font-mono font-black uppercase tracking-[0.2em]", isSelected ? "text-white/60" : "text-brand-blue")}>
-                        #{visit.token || '---'}
-                      </span>
-                      <Clock className={cn("w-3 h-3 opacity-40", isSelected ? "text-white" : "text-slate-400")} />
-                    </div>
-                    <h3 className="font-black tracking-tight text-sm uppercase italic truncate">{patient.firstName} {patient.lastName}</h3>
-                  </div>
-                </button>
-              );
-            })}
-            {activeVisits.length === 0 && (
-              <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-40 py-10 border border-dashed border-slate-100 rounded-3xl">
-                <Clock className="w-6 h-6 mb-2" />
-                <p className="text-[9px] font-black uppercase tracking-widest italic">No pending patients</p>
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-6">
+            {/* Unassigned / Next Available */}
+            {getDoctorQueue(null).length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between px-2">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Waiting / General</span>
+                  <span className="text-[8px] font-black text-slate-300">{getDoctorQueue(null).length}</span>
+                </div>
+                {getDoctorQueue(null).map(visit => {
+                  const patient = patients.find(p => p.id === visit.patientId);
+                  if (!patient) return null;
+                  const isSelected = selectedVisitId === visit.id;
+                  return (
+                    <button
+                      key={visit.id}
+                      onClick={() => handleVisitSelect(visit.id)}
+                      className={cn(
+                        "w-full p-4 rounded-xl border text-left transition-all duration-300 relative group overflow-hidden",
+                        isSelected 
+                          ? "bg-slate-800 border-transparent text-white shadow-lg" 
+                          : "bg-white border-slate-100 hover:border-brand-blue/30 text-slate-600"
+                      )}
+                    >
+                      <div className="relative z-10">
+                        <div className="flex justify-between items-start mb-1">
+                          <span className={cn("text-[8px] font-mono font-black uppercase tracking-[0.2em]", isSelected ? "text-white/60" : "text-brand-blue")}>
+                            #{visit.token || '---'}
+                          </span>
+                        </div>
+                        <h3 className="font-black tracking-tight text-xs uppercase italic truncate">{patient.firstName} {patient.lastName}</h3>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
+
+            {/* Iterating per Doctor */}
+            {doctors.map(doctor => {
+              const queue = getDoctorQueue(doctor.uid);
+              const isOwnClinic = userProfile?.uid === doctor.uid;
+              
+              // Only show empty clinics if it's the doctor's own clinic
+              if (queue.length === 0 && !isOwnClinic) return null;
+
+              return (
+                <div key={doctor.uid} className="space-y-2">
+                  <div className={cn(
+                    "flex items-center justify-between px-2 py-1 rounded-lg",
+                    isOwnClinic ? "bg-brand-blue/5 border border-brand-blue/10" : ""
+                  )}>
+                    <span className={cn(
+                      "text-[9px] font-black uppercase tracking-widest italic",
+                      isOwnClinic ? "text-brand-blue" : "text-slate-500"
+                    )}>
+                      Dr. {doctor.name} {isOwnClinic && "(You)"}
+                    </span>
+                    <span className={cn("text-[8px] font-black", isOwnClinic ? "text-brand-blue" : "text-slate-300")}>{queue.length}</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {queue.map(visit => {
+                      const patient = patients.find(p => p.id === visit.patientId);
+                      if (!patient) return null;
+                      const isSelected = selectedVisitId === visit.id;
+                      return (
+                        <button
+                          key={visit.id}
+                          onClick={() => handleVisitSelect(visit.id)}
+                          className={cn(
+                            "w-full p-4 rounded-xl border text-left transition-all duration-300 relative group overflow-hidden",
+                            isSelected 
+                              ? "bg-brand-blue border-transparent text-white shadow-[0_10px_20px_rgba(59,130,246,0.15)]" 
+                              : "bg-white border-slate-100 hover:border-brand-blue/30 text-slate-600"
+                          )}
+                        >
+                          <div className="relative z-10">
+                            <div className="flex justify-between items-start mb-1">
+                              <span className={cn("text-[8px] font-mono font-black uppercase tracking-[0.2em]", isSelected ? "text-white/60" : "text-brand-blue")}>
+                                #{visit.token || '---'}
+                              </span>
+                              <Clock className={cn("w-3 h-3 opacity-40", isSelected ? "text-white" : "text-slate-400")} />
+                            </div>
+                            <h3 className="font-black tracking-tight text-xs uppercase italic truncate">{patient.firstName} {patient.lastName}</h3>
+                          </div>
+                        </button>
+                      );
+                    })}
+                    {queue.length === 0 && (
+                      <div className="py-6 border border-dashed border-slate-100 rounded-xl text-center">
+                        <p className="text-[7px] font-black text-slate-300 uppercase tracking-[0.2em]">Clinic Idle</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 

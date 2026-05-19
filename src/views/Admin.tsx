@@ -1,53 +1,90 @@
 import React, { useState } from 'react';
 import { useHMS } from '../context/HMSContext';
-import { UserRole } from '../types';
-import { Plus, Users, Shield, UserCog, Key } from 'lucide-react';
+import { UserRole, UserProfile } from '../types';
+import { Plus, Users, Shield, UserCog, Key, Trash2, Edit2, X, Check, Save } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { UserProfile } from '../types';
 
 export function Admin() {
-  const { registerNewUser, userProfile } = useHMS();
+  const { registerNewUser, userProfile, doctors, allUsers, updateUserProfile, deleteUserProfile } = useHMS();
   const [activeSubTab, setActiveSubTab] = useState<'users' | 'settings'>('users');
+  
+  // Registration State
   const [newUserId, setNewUserId] = useState('');
   const [newUserPass, setNewUserPass] = useState('');
   const [newUserName, setNewUserName] = useState('');
   const [newUserRole, setNewUserRole] = useState<UserRole>('Staff');
+  const [associatedDoctorId, setAssociatedDoctorId] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
+  
+  // Edit State
+  const [editingUid, setEditingUid] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editRole, setEditRole] = useState<UserRole>('Staff');
+  const [editDocId, setEditDocId] = useState('');
+  
+  const [confirmDeleteUid, setConfirmDeleteUid] = useState<string | null>(null);
+  
   const [msg, setMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-
-  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
-
-  const fetchUsers = async () => {
-    try {
-      const snap = await getDocs(collection(db, 'users'));
-      setAllUsers(snap.docs.map(d => d.data()) as UserProfile[]);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  React.useEffect(() => {
-    fetchUsers();
-  }, []);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setMsg(null);
     setIsRegistering(true);
     try {
-      await registerNewUser(newUserId, newUserPass, newUserName, newUserRole);
+      await registerNewUser(newUserId, newUserPass, newUserName, newUserRole, newUserRole === 'Nurse' ? associatedDoctorId : undefined);
       setMsg({ type: 'success', text: `User ${newUserId} registered successfully.` });
       setNewUserId('');
       setNewUserPass('');
       setNewUserName('');
-      fetchUsers();
+      setAssociatedDoctorId('');
     } catch (error: unknown) {
       const err = error as { message?: string };
       setMsg({ type: 'error', text: err.message || 'Failed to register user.' });
     } finally {
       setIsRegistering(false);
+    }
+  };
+
+  const handleStartEdit = (u: UserProfile) => {
+    setEditingUid(u.uid);
+    setEditName(u.name);
+    setEditRole(u.role);
+    setEditDocId(u.associatedDoctorId || '');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingUid) return;
+    setMsg(null);
+    try {
+      await updateUserProfile(editingUid, {
+        name: editName,
+        role: editRole,
+        associatedDoctorId: editRole === 'Nurse' ? (editDocId || null) : null
+      });
+      setEditingUid(null);
+      setMsg({ type: 'success', text: 'Personnel record updated successfully.' });
+    } catch (e) {
+      console.error(e);
+      setMsg({ type: 'error', text: 'Failed to update user profile.' });
+    }
+  };
+
+  const handleDeleteUser = async (uid: string) => {
+    if (uid === userProfile?.uid) {
+      setMsg({ type: 'error', text: 'Cannot delete your own administrative account.' });
+      return;
+    }
+
+    setMsg(null);
+    try {
+      await deleteUserProfile(uid);
+      setMsg({ type: 'success', text: 'Personnel record removed from system.' });
+      setConfirmDeleteUid(null);
+    } catch (e) {
+      console.error(e);
+      setMsg({ type: 'error', text: 'Failed to delete user profile. Check permissions.' });
     }
   };
 
@@ -117,7 +154,7 @@ export function Admin() {
                       value={newUserId}
                       onChange={e => setNewUserId(e.target.value)}
                       placeholder="e.g. DOC-101"
-                      className="w-full px-5 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-brand-blue transition-all"
+                      className="w-full px-5 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-brand-blue transition-all"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -127,7 +164,7 @@ export function Admin() {
                       value={newUserName}
                       onChange={e => setNewUserName(e.target.value)}
                       placeholder="e.g. Dr. John Doe"
-                      className="w-full px-5 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-brand-blue transition-all"
+                      className="w-full px-5 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-brand-blue transition-all"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -135,7 +172,7 @@ export function Admin() {
                     <select 
                       value={newUserRole}
                       onChange={e => setNewUserRole(e.target.value as UserRole)}
-                      className="w-full px-5 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-brand-blue transition-all appearance-none"
+                      className="w-full px-5 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-brand-blue transition-all appearance-none"
                     >
                       <option value="Staff">Staff / Reception</option>
                       <option value="Nurse">Nursing Staff</option>
@@ -143,6 +180,23 @@ export function Admin() {
                       <option value="Admin">Administrator</option>
                     </select>
                   </div>
+
+                  {newUserRole === 'Nurse' && (
+                    <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 italic">Assign to Doctor Clinic</label>
+                       <select 
+                         value={associatedDoctorId}
+                         onChange={e => setAssociatedDoctorId(e.target.value)}
+                         className="w-full px-5 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-brand-blue transition-all appearance-none"
+                       >
+                         <option value="">General (No specific doctor)</option>
+                         {doctors.map(doc => (
+                           <option key={doc.uid} value={doc.uid}>Clinic: Dr. {doc.name}</option>
+                         ))}
+                       </select>
+                    </div>
+                  )}
+
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Node Password</label>
                     <div className="relative">
@@ -152,7 +206,7 @@ export function Admin() {
                         value={newUserPass}
                         onChange={e => setNewUserPass(e.target.value)}
                         placeholder="••••••••"
-                        className="w-full px-5 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-brand-blue transition-all"
+                        className="w-full px-5 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-brand-blue transition-all"
                       />
                       <Key className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
                     </div>
@@ -204,26 +258,128 @@ export function Admin() {
                         )}
                      </div>
                      <div className="w-px h-8 bg-slate-100 mx-2" />
-                     <button onClick={fetchUsers} className="text-[10px] font-black text-brand-blue uppercase tracking-widest hover:underline">Sync Node</button>
+                     <button onClick={() => window.location.reload()} className="text-[10px] font-black text-brand-blue uppercase tracking-widest hover:underline">Hard Refresh</button>
                   </div>
                </div>
 
-               <div className="flex-1 overflow-y-auto pr-4 scrollbar-hide">
-                  <div className="grid grid-cols-2 gap-4">
-                     {allUsers.map((u, i) => (
-                       <div key={i} className="p-5 bg-slate-50 border border-slate-100 rounded-[2rem] group hover:border-brand-blue/30 transition-all flex justify-between items-start">
-                          <div className="flex gap-4">
-                             <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-brand-blue">
-                                {u.role === 'Admin' ? <Shield className="w-6 h-6" /> : <Users className="w-6 h-6" />}
-                             </div>
-                             <div>
-                                <p className="text-sm font-black text-slate-800 tracking-tight">{u.name}</p>
-                                <p className="text-[10px] font-bold text-brand-blue uppercase tracking-widest mt-0.5">{u.role}</p>
-                                <p className="text-[9px] font-mono text-slate-400 mt-2 uppercase">ID: {u.employeeId}</p>
-                             </div>
-                          </div>
-                       </div>
-                     ))}
+               <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar">
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                     {allUsers.map((u) => {
+                       const isEditing = editingUid === u.uid;
+                       return (
+                         <div key={u.uid} className={cn(
+                           "p-5 border rounded-[2rem] transition-all flex flex-col gap-4",
+                           isEditing ? "bg-white border-brand-blue ring-2 ring-brand-blue/10 scale-[1.02] shadow-xl" : "bg-slate-50 border-slate-100"
+                         )}>
+                            <div className="flex justify-between items-start">
+                               <div className="flex gap-4">
+                                  <div className={cn(
+                                    "w-12 h-12 rounded-2xl shadow-sm flex items-center justify-center",
+                                    isEditing ? "bg-brand-blue text-white" : "bg-white text-brand-blue"
+                                  )}>
+                                     {u.role === 'Admin' ? <Shield className="w-6 h-6" /> : <Users className="w-6 h-6" />}
+                                  </div>
+                                  <div className="flex-1">
+                                     {isEditing ? (
+                                       <div className="space-y-3">
+                                          <input 
+                                            value={editName}
+                                            onChange={e => setEditName(e.target.value)}
+                                            className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-brand-blue"
+                                            placeholder="Name"
+                                          />
+                                          <div className="flex gap-2">
+                                            <select 
+                                              value={editRole}
+                                              onChange={e => setEditRole(e.target.value as UserRole)}
+                                              className="flex-1 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold outline-none appearance-none"
+                                            >
+                                              <option value="Staff">Staff</option>
+                                              <option value="Nurse">Nurse</option>
+                                              <option value="Doctor">Doctor</option>
+                                              <option value="Admin">Admin</option>
+                                            </select>
+                                            {editRole === 'Nurse' && (
+                                              <select 
+                                                value={editDocId}
+                                                onChange={e => setEditDocId(e.target.value)}
+                                                className="flex-1 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold outline-none appearance-none"
+                                              >
+                                                <option value="">General</option>
+                                                {doctors.map(d => (
+                                                  <option key={d.uid} value={d.uid}>Dr. {d.name}</option>
+                                                ))}
+                                              </select>
+                                            )}
+                                          </div>
+                                       </div>
+                                     ) : (
+                                       <>
+                                          <p className="text-sm font-black text-slate-800 tracking-tight">{u.name}</p>
+                                          <p className="text-[10px] font-bold text-brand-blue uppercase tracking-widest mt-0.5">{u.role}</p>
+                                          {u.associatedDoctorId && (
+                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1 italic">
+                                              Clinic: Dr. {doctors.find(d => d.uid === u.associatedDoctorId)?.name || 'Ahmed'}
+                                            </p>
+                                          )}
+                                          <p className="text-[9px] font-mono text-slate-400 mt-2 uppercase">ID: {u.employeeId}</p>
+                                       </>
+                                     )}
+                                  </div>
+                               </div>
+
+                               <div className="flex gap-1 items-center">
+                                  {isEditing ? (
+                                    <>
+                                       <button 
+                                         onClick={handleSaveEdit}
+                                         className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20"
+                                       >
+                                          <Save className="w-4 h-4" />
+                                       </button>
+                                       <button 
+                                         onClick={() => setEditingUid(null)}
+                                         className="w-8 h-8 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center hover:bg-slate-200 transition-colors"
+                                       >
+                                          <X className="w-4 h-4" />
+                                       </button>
+                                    </>
+                                  ) : confirmDeleteUid === u.uid ? (
+                                    <div className="flex items-center gap-1 bg-red-50 p-1 rounded-xl border border-red-100 animate-in fade-in zoom-in-95">
+                                       <button 
+                                         onClick={() => handleDeleteUser(u.uid)}
+                                         className="px-3 py-1 bg-red-500 text-white text-[8px] font-black uppercase rounded-lg hover:bg-red-600 transition-colors"
+                                       >
+                                          Confirm Delete
+                                       </button>
+                                       <button 
+                                         onClick={() => setConfirmDeleteUid(null)}
+                                         className="w-6 h-6 rounded-lg bg-white border border-slate-200 text-slate-400 flex items-center justify-center hover:bg-slate-50"
+                                       >
+                                          <X className="w-3 h-3" />
+                                       </button>
+                                    </div>
+                                  ) : (
+                                    <>
+                                       <button 
+                                         onClick={() => handleStartEdit(u)}
+                                         className="w-8 h-8 rounded-xl bg-white border border-slate-200 text-slate-400 flex items-center justify-center hover:text-brand-blue hover:border-brand-blue transition-all"
+                                       >
+                                          <Edit2 className="w-3.5 h-3.5" />
+                                       </button>
+                                       <button 
+                                         onClick={() => setConfirmDeleteUid(u.uid)}
+                                         className="w-8 h-8 rounded-xl bg-white border border-slate-200 text-slate-400 flex items-center justify-center hover:text-red-500 hover:border-red-500 transition-all"
+                                       >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                       </button>
+                                    </>
+                                  )}
+                               </div>
+                            </div>
+                         </div>
+                       );
+                     })}
                   </div>
                </div>
             </div>
@@ -232,3 +388,4 @@ export function Admin() {
     </div>
   );
 }
+

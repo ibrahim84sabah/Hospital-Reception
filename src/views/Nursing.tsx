@@ -13,8 +13,32 @@ import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 
 export function Nursing() {
-  const { visits, patients, deactivateVisit, saveVitalsAndTransfer } = useHMS();
+  const { visits, patients, doctors, deactivateVisit, saveVitalsAndTransfer, userProfile } = useHMS();
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
+
+  const getNurseQueue = (doctorId: string | null) => {
+    // Enforcement: Nurses only see their assigned clinic
+    if (userProfile?.role === 'Nurse' && userProfile.associatedDoctorId) {
+      if (doctorId !== userProfile.associatedDoctorId) return [];
+    }
+    
+    return visits.filter(v => 
+      v.assignedDoctorId === doctorId && 
+      v.currentDepartment === 'Nurse' && 
+      v.status !== 'Complete' && 
+      v.status !== 'Cancelled'
+    );
+  };
+
+  const totalNursingActive = visits.filter(v => {
+    const isNurseDept = v.currentDepartment === 'Nurse' && v.status !== 'Complete' && v.status !== 'Cancelled';
+    if (!isNurseDept) return false;
+    if (userProfile?.role === 'Nurse' && userProfile.associatedDoctorId) {
+       return v.assignedDoctorId === userProfile.associatedDoctorId;
+    }
+    return true;
+  }).length;
+
   const selectedVisit = visits.find(v => v.id === selectedVisitId);
   const selectedPatient = selectedVisit ? patients.find(p => p.id === selectedVisit.patientId) : null;
   const selectedVisitData = selectedVisit && selectedPatient ? { visit: selectedVisit, patient: selectedPatient } : null;
@@ -31,8 +55,6 @@ export function Nursing() {
 
   const [showConfirmTerminate, setShowConfirmTerminate] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-
-  const activeVisits = visits.filter(v => v.currentDepartment === 'Nurse' && v.status !== 'Complete' && v.status !== 'Cancelled');
 
   const handleTerminateSession = async () => {
     if (selectedVisitId) {
@@ -82,57 +104,123 @@ export function Nursing() {
       {/* Patient Queue */}
       <section className="col-span-12 lg:col-span-3 bento-card p-0 flex flex-col overflow-hidden">
         <div className="p-6 border-b border-slate-50 bg-slate-50/50">
-          <h2 className="text-sm font-black tracking-widest uppercase flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-brand-blue" />
-            Triage Queue
-          </h2>
-          <p className="text-[10px] text-slate-500 font-bold mt-1 uppercase tracking-widest">Awaiting Vitals ({activeVisits.length})</p>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-black tracking-widest uppercase flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-brand-blue" />
+              Triage Queues
+            </h2>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">({totalNursingActive})</p>
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
-          {activeVisits.map(visit => {
-            const patient = patients.find(p => p.id === visit.patientId);
-            if (!patient) return null;
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-6">
+          {/* Unassigned / Next Available */}
+          {getNurseQueue(null).length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-2">
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic">General / Triage</span>
+                <span className="text-[8px] font-black text-slate-300">{getNurseQueue(null).length}</span>
+              </div>
+              {getNurseQueue(null).map(visit => {
+                const patient = patients.find(p => p.id === visit.patientId);
+                if (!patient) return null;
+                const isSelected = selectedVisitId === visit.id;
+                return (
+                  <button
+                    key={visit.id}
+                    onClick={() => {
+                      setSelectedVisitId(visit.id);
+                      setShowConfirmTerminate(false);
+                      setVitals({
+                        temperature: visit.vitals?.temperature || '',
+                        bloodPressure: visit.vitals?.bloodPressure || '',
+                        height: visit.vitals?.height || '',
+                        weight: visit.vitals?.weight || '',
+                        pulse: visit.vitals?.pulse || '',
+                        respiratoryRate: visit.vitals?.respiratoryRate || '',
+                        oxygenSaturation: visit.vitals?.oxygenSaturation || '',
+                      });
+                    }}
+                    className={cn(
+                      "w-full p-4 rounded-xl border text-left transition-all duration-300 relative group overflow-hidden",
+                      isSelected 
+                        ? "bg-slate-800 border-transparent text-white shadow-lg" 
+                        : "bg-white border-slate-100 hover:border-brand-blue/30 text-slate-600"
+                    )}
+                  >
+                    <div className="relative z-10">
+                      <div className="flex justify-between items-start mb-1">
+                        <span className={cn("text-[8px] font-mono font-black uppercase tracking-[0.2em]", isSelected ? "text-white/60" : "text-brand-blue")}>
+                          #{visit.token || '---'}
+                        </span>
+                      </div>
+                      <h3 className="font-black tracking-tight text-xs uppercase italic truncate">{patient.firstName} {patient.lastName}</h3>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Grouped by Doctor */}
+          {doctors.map(doctor => {
+            const queue = getNurseQueue(doctor.uid);
+            if (queue.length === 0) return null;
+
             return (
-              <button
-                key={visit.id}
-                onClick={() => {
-                  setSelectedVisitId(visit.id);
-                  setShowConfirmTerminate(false);
-                  setVitals({
-                    temperature: visit.vitals?.temperature || '',
-                    bloodPressure: visit.vitals?.bloodPressure || '',
-                    height: visit.vitals?.height || '',
-                    weight: visit.vitals?.weight || '',
-                    pulse: visit.vitals?.pulse || '',
-                    respiratoryRate: visit.vitals?.respiratoryRate || '',
-                    oxygenSaturation: visit.vitals?.oxygenSaturation || '',
-                  });
-                }}
-                className={cn(
-                  "w-full p-4 rounded-2xl border text-left transition-all group relative overflow-hidden",
-                  selectedVisitId === visit.id 
-                    ? "bg-brand-blue border-brand-blue text-white shadow-lg shadow-brand-blue/20" 
-                    : "bg-white border-slate-100 hover:border-brand-blue/30 text-slate-600"
-                )}
-              >
-                <div className="relative z-10">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className={cn("text-[8px] font-mono font-black uppercase tracking-[0.2em]", selectedVisitData?.visit.id === visit.id ? "text-white/60" : "text-brand-blue")}>
-                      {visit.token || 'TOKEN-ERR'}
-                    </span>
-                    <Clock className={cn("w-3 h-3 opacity-40", selectedVisitData?.visit.id === visit.id ? "text-white" : "text-slate-400")} />
-                  </div>
-                  <h3 className="font-black tracking-tight text-sm uppercase italic leading-tight truncate">
-                    {patient.firstName} {patient.lastName}
-                  </h3>
+              <div key={doctor.uid} className="space-y-2">
+                <div className="flex items-center justify-between px-2 border-b border-slate-50 pb-1 mb-2">
+                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em] italic flex items-center gap-1">
+                    <Activity className="w-2.5 h-2.5 text-brand-blue" />
+                    Dr. {doctor.name}
+                  </span>
+                  <span className="text-[8px] font-black text-brand-blue">{queue.length}</span>
                 </div>
-              </button>
+                {queue.map(visit => {
+                  const patient = patients.find(p => p.id === visit.patientId);
+                  if (!patient) return null;
+                  const isSelected = selectedVisitId === visit.id;
+                  return (
+                    <button
+                      key={visit.id}
+                      onClick={() => {
+                        setSelectedVisitId(visit.id);
+                        setShowConfirmTerminate(false);
+                        setVitals({
+                          temperature: visit.vitals?.temperature || '',
+                          bloodPressure: visit.vitals?.bloodPressure || '',
+                          height: visit.vitals?.height || '',
+                          weight: visit.vitals?.weight || '',
+                          pulse: visit.vitals?.pulse || '',
+                          respiratoryRate: visit.vitals?.respiratoryRate || '',
+                          oxygenSaturation: visit.vitals?.oxygenSaturation || '',
+                        });
+                      }}
+                      className={cn(
+                        "w-full p-4 rounded-xl border text-left transition-all duration-300 relative group overflow-hidden",
+                        isSelected 
+                          ? "bg-brand-blue border-transparent text-white shadow-lg" 
+                          : "bg-white border-slate-100 hover:border-brand-blue/30 text-slate-600"
+                      )}
+                    >
+                      <div className="relative z-10">
+                        <div className="flex justify-between items-start mb-1">
+                          <span className={cn("text-[8px] font-mono font-black uppercase tracking-[0.2em]", isSelected ? "text-white/60" : "text-brand-blue")}>
+                            #{visit.token || '---'}
+                          </span>
+                        </div>
+                        <h3 className="font-black tracking-tight text-xs uppercase italic truncate">{patient.firstName} {patient.lastName}</h3>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
-          {activeVisits.length === 0 && (
+          
+          {totalNursingActive === 0 && (
             <div className="h-64 flex flex-col items-center justify-center text-slate-400 border border-dashed border-slate-100 rounded-3xl opacity-50">
               <Activity className="w-8 h-8 mb-2" />
-              <p className="text-[10px] font-black uppercase tracking-widest">Queue Clear</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-center px-4">All systems clear. No patients pending.</p>
             </div>
           )}
         </div>
