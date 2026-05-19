@@ -5,17 +5,20 @@ import {
   CheckCircle2, 
   CreditCard,
   Clock,
-  Shield,
   Search,
   ChevronRight,
-  TrendingDown
+  Info,
+  Activity
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
+import { MEDICATIONS } from '../constants/medications';
 
 export function Pharmacy() {
   const { visits, patients, updateOrder, updateVisitStatus, markPaid } = useHMS();
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
+  const [inventorySearch, setInventorySearch] = useState('');
+  
   const selectedVisit = visits.find(v => v.id === selectedVisitId);
   const selectedPatient = selectedVisit ? patients.find(p => p.id === selectedVisit.patientId) : null;
   const selectedVisitData = selectedVisit && selectedPatient ? { visit: selectedVisit, patient: selectedPatient } : null;
@@ -27,6 +30,12 @@ export function Pharmacy() {
       v.orders.some(o => o.status === 'Ordered' && o.type === 'Pharmacy')
     )
   );
+
+  const filteredMedications = MEDICATIONS.filter(m => 
+    m.itemName.toLowerCase().includes(inventorySearch.toLowerCase()) ||
+    m.genericName.toLowerCase().includes(inventorySearch.toLowerCase())
+  ).slice(0, 50);
+
   const prescriptions = selectedVisit?.orders.filter(o => o.type === 'Pharmacy') || [];
 
   const handleDispense = async (orderId: string) => {
@@ -146,35 +155,60 @@ export function Pharmacy() {
 
               <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6">
                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 italic">Prescription Stream</h4>
-                {prescriptions.map(order => (
-                  <div key={order.id} className="p-6 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between group hover:border-orange-500/30 transition-all">
-                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
-                           <Pill className="w-5 h-5" />
-                        </div>
-                        <div>
-                           <p className="text-sm font-black text-slate-800 uppercase italic tracking-tight">{order.description}</p>
-                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Dispensing Node_RX4</p>
-                        </div>
-                     </div>
-                     
-                     <div className="flex items-center gap-3">
-                        {order.status === 'Dispensed' ? (
-                          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-[9px] font-black uppercase tracking-widest">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            Dispensed
-                          </div>
-                        ) : (
-                          <button 
-                            onClick={() => handleDispense(order.id)}
-                            className="px-6 py-2 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-700 transition-all shadow-lg shadow-orange-100"
-                          >
-                            Execute Fulfillment
-                          </button>
-                        )}
-                     </div>
-                  </div>
-                ))}
+                {prescriptions.map(order => {
+                  const regMed = order.medicationId ? MEDICATIONS.find(m => m.id === order.medicationId) : null;
+                  
+                  return (
+                    <div key={order.id} className="p-6 bg-slate-50 border border-slate-100 rounded-3xl flex flex-col gap-4 group hover:border-orange-500/30 transition-all shadow-sm">
+                       <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center shadow-inner">
+                               <Pill className="w-6 h-6" />
+                            </div>
+                            <div>
+                               <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-1 italic">
+                                 {regMed ? `Registry Match: ${regMed.id}` : 'Manual Entry'}
+                               </p>
+                               <h4 className="text-base font-black text-slate-800 uppercase italic tracking-tight leading-none">
+                                 {regMed ? regMed.itemName : order.description}
+                               </h4>
+                               {regMed && (
+                                 <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">
+                                   Generic: <span className="text-slate-600">{regMed.genericName}</span> • Dose: <span className="text-slate-600">{regMed.strength} {regMed.drugMeasurement}</span>
+                                 </p>
+                               )}
+                            </div>
+                         </div>
+                         
+                         <div className="flex items-center gap-3">
+                            {order.status === 'Dispensed' ? (
+                              <div className="flex items-center gap-1.5 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                                <CheckCircle2 className="w-4 h-4" />
+                                Fulfilled
+                              </div>
+                            ) : (
+                              <button 
+                                onClick={() => handleDispense(order.id)}
+                                className="px-8 py-3 bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-orange-700 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-orange-100 flex items-center gap-2"
+                              >
+                                <Activity className="w-3.5 h-3.5" />
+                                DISPENSE_SIGMA
+                              </button>
+                            )}
+                         </div>
+                       </div>
+
+                       {order.sig && (
+                         <div className="px-5 py-4 bg-white border border-slate-100 rounded-2xl">
+                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Pharmacological Instructions (SIG)</p>
+                           <p className="text-xs font-bold text-brand-blue uppercase italic tracking-wide">
+                             {order.sig}
+                           </p>
+                         </div>
+                       )}
+                    </div>
+                  );
+                })}
                 {prescriptions.length === 0 && (
                    <div className="p-12 text-center text-slate-300 border border-dashed border-slate-200 rounded-3xl opacity-40 italic">
                       <p className="text-[10px] font-black uppercase tracking-widest">No verified RX in consultation log</p>
@@ -216,43 +250,76 @@ export function Pharmacy() {
         </AnimatePresence>
       </section>
 
-      {/* Analytics & Meta */}
+      {/* Pharmacy Inventory System */}
       <section className="col-span-12 lg:col-span-3 flex flex-col gap-6">
-         <div className="bento-card-dark p-6 bg-brand-dark flex flex-col h-1/2">
-            <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-6 italic">Registry Biometrics</h3>
-            <div className="space-y-4">
-               <div className="p-4 bg-white/2 border border-white/5 rounded-2xl">
-                  <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1 italic">Patient Sector</p>
-                  <p className="text-xl font-black text-white italic tracking-tighter">{selectedVisitData ? `${2024 - new Date(selectedVisitData.patient.dob).getFullYear()}Y / ${selectedVisitData.patient.gender[0]}` : '--/--'}</p>
-               </div>
-               <div className="p-4 bg-orange-600/10 border border-orange-600/20 rounded-2xl flex items-center justify-between group">
-                  <div>
-                    <p className="text-[8px] font-black text-orange-500 uppercase tracking-widest mb-1 italic">Security Status</p>
-                    <p className="text-sm font-black text-white italic uppercase tracking-widest">CONFIRMED</p>
-                  </div>
-                  <Shield className="w-8 h-8 text-orange-500/40 group-hover:scale-110 transition-transform" />
+         <div className="bento-card p-0 flex flex-col h-full overflow-hidden border-slate-100 shadow-sm">
+            <div className="p-5 border-b border-slate-50 bg-slate-50/30">
+               <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+                 <div className="w-1.5 h-1.5 rounded-full bg-brand-blue" />
+                 Global Inventory Registry
+               </h3>
+               <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <input 
+                    type="text"
+                    placeholder="Search medication database..."
+                    value={inventorySearch}
+                    onChange={(e) => setInventorySearch(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all"
+                  />
                </div>
             </div>
-         </div>
-         <div className="bento-card flex-1 p-6 flex flex-col justify-between border-slate-100">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Inventory Telemetry</h3>
-            <div className="space-y-3">
-               {[
-                 { label: 'Stock Level', val: '88.4%', trend: 'up' },
-                 { label: 'Avg Fulfillment', val: '6.2m', trend: 'down' },
-                 { label: 'POS Clearance', val: '100%', trend: 'stable' }
-               ].map(stat => (
-                 <div key={stat.label} className="flex justify-between items-center py-2 border-b border-slate-50 last:border-0 text-slate-600">
-                   <span className="text-[10px] font-black uppercase tracking-widest">{stat.label}</span>
-                   <div className="flex items-center gap-2">
-                      <span className="text-xs font-black italic text-brand-blue">{stat.val}</span>
-                      {stat.trend === 'down' && <TrendingDown className="w-3 h-3 text-emerald-500" />}
-                   </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
+               {filteredMedications.map(med => (
+                 <div 
+                   key={med.id}
+                   className="p-4 bg-white border border-slate-100 rounded-2xl hover:border-brand-blue/30 transition-all group"
+                 >
+                    <div className="flex justify-between items-start mb-2">
+                       <span className="text-[8px] font-black text-brand-blue uppercase tracking-widest bg-brand-blue/5 px-2 py-0.5 rounded leading-none italic">
+                         {med.id}
+                       </span>
+                       <span className={cn(
+                         "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded leading-none",
+                         med.stock > 100 ? "bg-emerald-50 text-emerald-600" : "bg-orange-50 text-orange-600"
+                       )}>
+                         STOCK: {med.stock}
+                       </span>
+                    </div>
+                    <h4 className="text-[11px] font-black text-slate-800 uppercase italic leading-tight group-hover:text-brand-blue transition-colors">
+                      {med.itemName}
+                    </h4>
+                    <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">
+                      Science: <span className="text-slate-600">{med.genericName}</span>
+                    </p>
+                    
+                    <div className="mt-3 pt-3 border-t border-slate-50 grid grid-cols-2 gap-2">
+                       <div>
+                          <p className="text-[7px] font-black text-slate-400 uppercase">Usage Pathway</p>
+                          <p className="text-[9px] font-bold text-slate-700 uppercase italic">{med.usage}</p>
+                       </div>
+                       <div className="text-right">
+                          <p className="text-[7px] font-black text-slate-400 uppercase">Dose Vector</p>
+                          <p className="text-[9px] font-bold text-slate-700 uppercase italic">{med.strength} {med.drugMeasurement}</p>
+                       </div>
+                    </div>
                  </div>
                ))}
+               {filteredMedications.length === 0 && (
+                 <div className="h-64 flex flex-col items-center justify-center text-slate-300 italic">
+                    <Pill className="w-8 h-8 mb-2 opacity-20" />
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-40 text-center px-6">Medication not found in regional registry</p>
+                 </div>
+               )}
             </div>
-            <div className="p-4 bg-orange-50/50 rounded-2xl mt-6 border border-orange-100 italic">
-               <p className="text-[9px] font-bold text-orange-800 leading-tight">Verified prescriptions must be dispensed within the session timeframe to avoid LIMS timeout.</p>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+               <div className="flex items-center gap-2">
+                  <Activity className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">LIMS Sync Active</span>
+               </div>
+               <Info className="w-3.5 h-3.5 text-slate-300" />
             </div>
          </div>
       </section>

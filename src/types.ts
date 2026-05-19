@@ -48,6 +48,8 @@ export interface Order {
   status: 'Ordered' | 'Ready' | 'Dispensed' | 'Completed' | 'Pending';
   results?: string;
   timestamp: string;
+  medicationId?: string;
+  sig?: string;
 }
 
 export interface Patient {
@@ -59,6 +61,19 @@ export interface Patient {
   gender: 'Male' | 'Female' | 'Other';
   mobile: string;
   createdAt: string;
+}
+
+export interface Medication {
+  id: string;
+  itemName: string;
+  itemType: string;
+  itemCategory: string;
+  drugFormName: string;
+  drugMeasurement: string;
+  genericName: string;
+  strength: string;
+  usage: string;
+  stock: number;
 }
 
 export interface Visit {

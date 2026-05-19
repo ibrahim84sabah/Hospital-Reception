@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useHMS } from '../context/HMSContext';
-import { SOAPNotes, Order } from '../types';
+import { SOAPNotes, Order, Medication } from '../types';
 import { 
   Activity, 
   CheckCircle2, 
@@ -18,12 +18,14 @@ import {
   Send,
   X,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  ChevronLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { LAB_TESTS } from '../constants/labTests';
+import { MEDICATIONS } from '../constants/medications';
 import { LabReportTemplate } from '../components/LabReportTemplate';
 
 export function Doctor() {
@@ -49,6 +51,9 @@ export function Doctor() {
   const [viewingReportOrder, setViewingReportOrder] = useState<Order | null>(null);
   const [labSearch, setLabSearch] = useState('');
   const [selectedLabTests, setSelectedLabTests] = useState<string[]>([]);
+  const [medSearch, setMedSearch] = useState('');
+  const [selectedMed, setSelectedMed] = useState<Medication | null>(null);
+  const [sig, setSig] = useState(''); // Dosage/Frequency instructions
 
   const activeVisits = visits.filter(v => v.currentDepartment === 'Doctor' && v.status !== 'Complete' && v.status !== 'Cancelled');
   const nursingQueue = visits.filter(v => v.currentDepartment === 'Nurse' && v.status !== 'Complete' && v.status !== 'Cancelled');
@@ -95,8 +100,33 @@ export function Doctor() {
     test.toLowerCase().includes(labSearch.toLowerCase())
   ).slice(0, 15);
 
+  const filteredMeds = MEDICATIONS.filter(med => 
+    med.itemName.toLowerCase().includes(medSearch.toLowerCase()) ||
+    med.genericName.toLowerCase().includes(medSearch.toLowerCase())
+  ).slice(0, 15);
+
+  const handleOrderMedication = async () => {
+    if (!selectedVisit || !selectedMed) return;
+    
+    const medDescription = `${selectedMed.itemName} (${selectedMed.genericName}) - Dose: ${selectedMed.strength} ${selectedMed.drugMeasurement} | Instruction: ${sig}`;
+    
+    await addOrder(selectedVisit.id, { 
+      type: 'Pharmacy', 
+      description: medDescription,
+      medicationId: selectedMed.id,
+      sig: sig
+    });
+    
+    setSelectedMed(null);
+    setMedSearch('');
+    setSig('');
+  };
+
   const concludeVisit = async (requireFollowUp: boolean) => {
     if (!selectedVisit || !selectedPatient) return;
+    
+    // Ensure latest SOAP/Diagnosis is saved before closing
+    await updateSOAP(selectedVisit.id, soap, diagnosis);
     
     if (requireFollowUp) {
       // Create a NEW visit record for the follow up date
@@ -135,6 +165,22 @@ export function Doctor() {
     const container = document.querySelector('.overflow-y-auto');
     if (container) {
       container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    }
+  };
+
+  const handleVisitSelect = async (visitId: string) => {
+    if (selectedVisitId === visitId) return;
+
+    // Immediate save of current session before switching context
+    if (selectedVisitId) {
+      await updateSOAP(selectedVisitId, soap, diagnosis);
+    }
+
+    const visit = visits.find(v => v.id === visitId);
+    if (visit) {
+      setSelectedVisitId(visitId);
+      setSoap(visit.soapNotes || { subjective: '', objective: '', assessment: '', plan: '' });
+      setDiagnosis(visit.diagnosis || '');
     }
   };
 
@@ -185,11 +231,7 @@ export function Doctor() {
               return (
                 <button
                   key={visit.id}
-                  onClick={() => {
-                    setSelectedVisitId(visit.id);
-                    setSoap(visit.soapNotes || { subjective: '', objective: '', assessment: '', plan: '' });
-                    setDiagnosis(visit.diagnosis || '');
-                  }}
+                  onClick={() => handleVisitSelect(visit.id)}
                   className={cn(
                     "w-full p-4 rounded-2xl border text-left transition-all duration-300 relative group overflow-hidden",
                     selectedVisitId === visit.id 
@@ -312,7 +354,30 @@ export function Doctor() {
                   </div>
 
                   <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
-                    {activeTab === 'soap' && (
+                    {viewingReportOrder ? (
+                      <div className="space-y-4 pb-8">
+                        <div className="flex items-center justify-between mb-4 sticky top-0 bg-white/80 backdrop-blur-sm z-10 py-2">
+                          <button 
+                            onClick={() => setViewingReportOrder(null)}
+                            className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-brand-blue transition-colors group"
+                          >
+                            <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" /> 
+                            <span>العودة للطلبات والنتائج // Back to Orders & Results</span>
+                          </button>
+                        </div>
+                        <div className="rounded-3xl border border-slate-100 overflow-hidden shadow-2xl">
+                          <LabReportTemplate 
+                             patient={selectedPatient!}
+                             visit={selectedVisitData!.visit}
+                             order={viewingReportOrder}
+                             title="Diagnostic Laboratory Report"
+                             onPrint={() => {}}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {activeTab === 'soap' && (
                       <div className="grid grid-cols-2 gap-6 pb-8">
                         <div className="space-y-4">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 italic">Subjective // History</label>
@@ -561,6 +626,7 @@ export function Doctor() {
                                      )}
                                    </div>
                                  );
+
                                })}
                              {selectedVisitData.visit.orders.filter(o => o.type !== 'Pharmacy').length === 0 && (
                                 <div className="col-span-2 p-12 text-center text-slate-300 border border-dashed border-slate-200 rounded-3xl">
@@ -573,22 +639,78 @@ export function Doctor() {
                     {activeTab === 'pharmacy' && (
                        <div className="space-y-6 pb-8">
                           <div className="bento-card p-6 border-brand-blue/10 bg-slate-50/50">
-                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 italic mb-4 block">New Prescription</label>
-                             <div className="flex gap-4">
-                               <input 
-                                 value={orderDesc}
-                                 onChange={e => setOrderDesc(e.target.value)}
-                                 placeholder="Medication name, dosage, frequency..."
-                                 className="flex-1 px-5 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-brand-blue outline-none transition-all"
-                                 onFocus={() => setSelectedOrderType('Pharmacy')}
-                               />
-                               <button 
-                                 onClick={handleAddOrder}
-                                 disabled={!orderDesc}
-                                 className="px-6 py-3 bg-brand-blue text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-brand-blue/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-blue/20"
-                               >
-                                 Add to RX
-                               </button>
+                             <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2 italic">
+                               <Plus className="w-3 h-3 text-brand-blue" /> New Clinical Prescription Stream
+                             </h3>
+                             
+                             <div className="space-y-4">
+                                {/* Search Registry */}
+                                <div className="relative">
+                                   <div className="relative">
+                                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                      <input 
+                                        value={selectedMed ? selectedMed.itemName : medSearch}
+                                        onChange={e => {
+                                          setMedSearch(e.target.value);
+                                          setSelectedMed(null);
+                                        }}
+                                        placeholder="Search Clinical Registry (Scientific or Brand Name)..."
+                                        className="w-full pl-12 pr-4 py-4 bg-white border border-slate-100 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-brand-blue outline-none transition-all shadow-sm"
+                                      />
+                                   </div>
+
+                                   {medSearch && !selectedMed && (
+                                     <motion.div 
+                                       initial={{ opacity: 0, y: 10 }}
+                                       animate={{ opacity: 1, y: 0 }}
+                                       className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden max-h-[300px] overflow-y-auto custom-scrollbar"
+                                     >
+                                       {filteredMeds.map(med => (
+                                         <button
+                                           key={med.id}
+                                           onClick={() => {
+                                             setSelectedMed(med);
+                                             setMedSearch('');
+                                           }}
+                                           className="w-full px-6 py-4 text-left hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors"
+                                         >
+                                           <div className="flex justify-between items-center mb-1">
+                                              <p className="text-xs font-black text-slate-800 uppercase italic">{med.itemName}</p>
+                                              <span className="text-[8px] font-black text-brand-blue bg-blue-50 px-2 py-0.5 rounded uppercase">{med.id}</span>
+                                           </div>
+                                           <div className="flex gap-4">
+                                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">GENERIC: <span className="text-slate-600">{med.genericName}</span></p>
+                                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">DOSE: <span className="text-slate-600">{med.strength} {med.drugMeasurement}</span></p>
+                                           </div>
+                                         </button>
+                                       ))}
+                                     </motion.div>
+                                   )}
+                                </div>
+
+                                {/* Sigma / Instructions */}
+                                {selectedMed && (
+                                   <motion.div 
+                                     initial={{ opacity: 0, height: 0 }}
+                                     animate={{ opacity: 1, height: 'auto' }}
+                                     className="flex gap-4"
+                                   >
+                                      <input 
+                                        value={sig}
+                                        onChange={e => setSig(e.target.value)}
+                                        placeholder="Dosage instructions (e.g., 1x3 before food)..."
+                                        className="flex-1 px-5 py-4 bg-white border border-brand-blue/20 rounded-2xl text-xs font-bold text-brand-blue focus:ring-2 focus:ring-brand-blue outline-none transition-all shadow-sm"
+                                        autoFocus
+                                      />
+                                      <button 
+                                        onClick={handleOrderMedication}
+                                        className="px-8 py-4 bg-brand-blue text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-brand-blue/20 flex items-center gap-2"
+                                      >
+                                        <Send className="w-4 h-4" />
+                                        COMMIT RX
+                                      </button>
+                                   </motion.div>
+                                )}
                              </div>
                           </div>
                           
@@ -686,6 +808,8 @@ export function Doctor() {
                         )}
                       </div>
                     )}
+                      </>
+                    )}
                   </div>
 
                   <div className="mt-auto pt-6 border-t border-slate-50 flex gap-4 relative">
@@ -774,52 +898,6 @@ export function Doctor() {
       </section>
     </div>
 
-    <AnimatePresence>
-      {viewingReportOrder && selectedVisitData && (
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={() => setViewingReportOrder(null)}
-          className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-8 overflow-y-auto cursor-zoom-out"
-        >
-          <motion.div 
-            initial={{ opacity: 0, y: 50, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 50, scale: 0.95 }}
-            onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-4xl cursor-default"
-          >
-            <div className="absolute -top-14 right-0 flex gap-3">
-              <button 
-                onClick={() => setViewingReportOrder(null)}
-                className="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border border-white/10"
-              >
-                <X className="w-4 h-4" /> Close Report
-              </button>
-            </div>
-            
-            <div className="rounded-[40px] shadow-2xl overflow-hidden bg-white relative group">
-              <button 
-                onClick={() => setViewingReportOrder(null)}
-                className="absolute top-8 right-8 w-10 h-10 bg-slate-100 hover:bg-red-500 hover:text-white text-slate-400 rounded-full flex items-center justify-center transition-all z-50 shadow-sm print:hidden"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              
-              <LabReportTemplate 
-                patient={selectedVisitData.patient}
-                visit={selectedVisitData.visit}
-                order={viewingReportOrder}
-                title={viewingReportOrder.type === 'Radiology' ? 'Radiology Report' : 'Laboratory Test Results'}
-                arabicTitle={viewingReportOrder.type === 'Radiology' ? 'تقرير الأشعة' : 'نتائج الفحوصات المخبرية'}
-                onPrint={() => window.print()}
-              />
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
     </>
   );
 }
