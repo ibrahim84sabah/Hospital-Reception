@@ -21,7 +21,9 @@ import {
   Lock,
   ArrowRight,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  Menu,
+  X
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { cn } from './lib/utils';
@@ -41,6 +43,8 @@ function AppContent() {
     logout,
     provisionUserProfile
   } = useHMS();
+
+  const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
   const [id, setId] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -387,12 +391,26 @@ function AppContent() {
   };
 
   return (
-    <div className="flex h-screen bg-brand-bg font-sans text-slate-900 overflow-hidden">
-      <Sidebar />
+    <div className="flex h-screen bg-brand-bg font-sans text-slate-900 overflow-hidden relative">
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      
+      {sidebarOpen && (
+        <div 
+          onClick={() => setSidebarOpen(false)}
+          className="lg:hidden fixed inset-0 bg-black/60 z-40 backdrop-blur-xs transition-opacity animate-in fade-in duration-300"
+        />
+      )}
       
       <main className="flex-1 flex flex-col h-full overflow-hidden">
-        <header className="h-16 bg-brand-dark flex items-center justify-between px-8 shrink-0 z-10 shadow-lg">
-          <div className="flex items-center gap-6">
+        <header className="h-16 bg-brand-dark flex items-center justify-between px-4 sm:px-8 shrink-0 z-10 shadow-lg">
+          <div className="flex items-center gap-3 sm:gap-6">
+            <button 
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="lg:hidden p-2 -ml-2 text-white hover:bg-slate-800 rounded-lg transition-colors shrink-0"
+              title="Toggle Menu"
+            >
+              {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
             <button 
               onClick={() => setShowDashboard(true)}
               className={cn(
@@ -400,18 +418,18 @@ function AppContent() {
                 showDashboard ? "opacity-100" : "opacity-60 hover:opacity-100"
               )}
             >
-              <div className="w-8 h-8 bg-brand-blue rounded-lg flex items-center justify-center shadow-lg shadow-brand-blue/30 group-hover:rotate-6 transition-transform">
+              <div className="w-8 h-8 bg-brand-blue rounded-lg flex items-center justify-center shadow-lg shadow-brand-blue/30 group-hover:rotate-6 transition-transform shrink-0">
                 <LayoutGrid className="w-4 h-4 text-white" />
               </div>
-              <h1 className="text-white font-black text-xl tracking-tighter">
-                HOSPITAL.AI <span className="text-brand-blue font-normal font-mono text-[10px] tracking-normal ml-1">OPERATIONS ENGINE</span>
+              <h1 className="text-white font-black text-sm sm:text-xl tracking-tighter truncate">
+                HOSPITAL.AI <span className="hidden sm:inline text-brand-blue font-normal font-mono text-[10px] tracking-normal ml-1">OPERATIONS ENGINE</span>
               </h1>
             </button>
             
-            <div className="w-px h-6 bg-slate-800" />
+            <div className="hidden sm:block w-px h-6 bg-slate-800 shrink-0" />
             
             {!showDashboard ? (
-              <div className="flex items-center gap-4 text-brand-blue font-bold text-xs uppercase tracking-widest">
+              <div className="hidden sm:flex items-center gap-4 text-brand-blue font-bold text-xs uppercase tracking-widest">
                 <div className="w-1.5 h-1.5 rounded-full bg-brand-blue animate-pulse" />
                 <div className="flex flex-col items-start leading-none">
                   <span className="text-[10px] text-white">وحدة {activeDepartment === 'Doctor' ? 'الطبيب' : activeDepartment}</span>
@@ -421,15 +439,15 @@ function AppContent() {
             ) : (
               <button 
                 onClick={() => setShowDashboard(false)}
-                className="text-[10px] font-bold text-slate-400 hover:text-white uppercase tracking-widest transition-colors"
+                className="hidden sm:block text-[10px] font-bold text-slate-400 hover:text-white uppercase tracking-widest transition-colors"
               >
                 Return to Active Unit
               </button>
             )}
           </div>
 
-          <div className="flex items-center gap-6">
-            <div className="hidden lg:flex gap-6 text-[9px] font-mono font-bold tracking-widest">
+          <div className="flex items-center gap-4 sm:gap-6">
+            <div className="hidden xl:flex gap-6 text-[9px] font-mono font-bold tracking-widest">
               <div className="flex items-center gap-2 text-emerald-400">
                 <span className="system-status-dot bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
                 SYSTEM ACTIVE
@@ -440,16 +458,16 @@ function AppContent() {
               </div>
             </div>
 
-            <div className="h-6 w-px bg-slate-800"></div>
+            <div className="hidden sm:block h-6 w-px bg-slate-800"></div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <div className="flex flex-col items-end leading-none">
-                <span className="text-white text-xs font-bold tracking-tight italic">{userProfile.name}</span>
+                <span className="text-white text-xs font-bold tracking-tight italic truncate max-w-[80px] sm:max-w-[150px]">{userProfile.name}</span>
                 <span className="text-[8px] text-slate-500 font-mono tracking-[0.2em] font-black uppercase mt-0.5">ID: {userProfile.employeeId}</span>
               </div>
               <button 
                 onClick={() => logout()}
-                className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 shadow-xl overflow-hidden flex items-center justify-center transition-all hover:scale-110 hover:border-red-500/50 group"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 border border-slate-700 shadow-xl overflow-hidden flex items-center justify-center transition-all hover:scale-110 hover:border-red-500/50 group shrink-0"
               >
                 <LogOut className="w-4 h-4 text-slate-500 group-hover:text-red-500 transition-colors" />
               </button>
@@ -472,7 +490,7 @@ function AppContent() {
           </AnimatePresence>
         </div>
 
-        <footer className="h-8 bg-white border-t border-slate-200 px-6 flex items-center justify-between text-[9px] font-black text-slate-400 shrink-0 uppercase tracking-[0.2em]">
+        <footer className="hidden md:flex h-8 bg-white border-t border-slate-200 px-6 items-center justify-between text-[9px] font-black text-slate-400 shrink-0 uppercase tracking-[0.2em]">
           <div className="flex gap-8">
             <span className="flex items-center gap-2">
               <span className="w-1 h-1 rounded-full bg-slate-300"></span>

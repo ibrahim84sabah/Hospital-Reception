@@ -73,7 +73,7 @@ export function Reception() {
   const activeVisits = visits.filter(v => v.status !== 'Complete' && v.status !== 'Cancelled');
   const activeReceptionVisits = activeVisits.filter(v => v.currentDepartment === 'Reception');
 
-  const PatientQueueCard = ({ visit, patient }: { visit: Visit, patient: Patient }) => (
+  const PatientQueueCard = ({ visit, patient }: { visit: Visit, patient: Patient, key?: React.Key }) => (
     <motion.div 
       layout
       initial={{ x: 20, opacity: 0 }}
@@ -126,9 +126,9 @@ export function Reception() {
   );
 
   return (
-    <div className="grid grid-cols-12 gap-6 h-full p-2">
+    <div className="grid grid-cols-12 gap-6 h-auto lg:h-full p-2">
       {/* Search & Database Queue */}
-      <section className="col-span-12 lg:col-span-3 bento-card p-0 flex flex-col overflow-hidden">
+      <section className="col-span-12 lg:col-span-3 bento-card p-0 flex flex-col overflow-hidden h-[450px] lg:h-full">
         <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
           <div>
             <h2 className="text-sm font-black tracking-widest uppercase flex items-center gap-2">
@@ -444,7 +444,7 @@ export function Reception() {
             </div>
          </div>
 
-         <div className="bento-card flex-1 p-6 relative overflow-hidden flex flex-col">
+         <div className="bento-card flex-1 p-6 relative overflow-hidden flex flex-col min-h-[350px]">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Live Desk Queue</h3>
               <div className="px-2 py-1 bg-brand-blue/10 text-brand-blue text-[8px] font-black rounded uppercase tracking-widest">

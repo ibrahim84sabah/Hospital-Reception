@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import { useHMS } from '../context/HMSContext';
 import { UserRole, UserProfile } from '../types';
-import { Plus, Users, Shield, UserCog, Key, Trash2, Edit2, X, Check, Save } from 'lucide-react';
+import { Plus, Users, Shield, UserCog, Key, Trash2, Edit2, X, Save } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 
 export function Admin() {
   const { registerNewUser, userProfile, doctors, allUsers, updateUserProfile, deleteUserProfile } = useHMS();
@@ -101,14 +99,14 @@ export function Admin() {
   }
 
   return (
-    <div className="h-full flex flex-col gap-6 overflow-hidden">
-      <div className="flex items-center justify-between shrink-0">
+    <div className="h-full flex flex-col gap-6 lg:overflow-hidden overflow-y-auto">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
         <div>
            <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Control <span className="text-brand-blue">Center</span></h2>
            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-1">Personnel / Infrastructure / Node Governance</p>
         </div>
         
-        <div className="flex gap-2 bg-slate-100 p-1 rounded-2xl">
+        <div className="flex gap-2 bg-slate-100 p-1 rounded-2xl self-start md:self-auto">
            <button 
              onClick={() => setActiveSubTab('users')}
              className={cn(
@@ -132,12 +130,12 @@ export function Admin() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden grid grid-cols-12 gap-6">
+      <div className="flex-1 lg:overflow-hidden grid grid-cols-12 gap-6 h-auto">
          {/* Sidebar for Registration */}
-         <div className="col-span-4 h-full overflow-y-auto pr-2">
+         <div className="col-span-12 lg:col-span-4 lg:h-full overflow-y-auto pr-2">
             <div className="bento-card p-6 bg-slate-50 border-brand-blue/10">
                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 bg-brand-blue/10 rounded-xl flex items-center justify-center">
+                  <div className="w-10 h-10 bg-brand-blue/10 rounded-xl flex items-center justify-center shrink-0">
                     <Plus className="w-5 h-5 text-brand-blue" />
                   </div>
                   <div>
@@ -232,7 +230,7 @@ export function Admin() {
          </div>
 
          {/* Main Content Area */}
-         <div className="col-span-8 h-full overflow-hidden flex flex-col gap-6">
+         <div className="col-span-12 lg:col-span-8 lg:h-full overflow-hidden flex flex-col gap-6 min-h-[500px]">
             <div className="bento-card flex-1 p-8 bg-white overflow-hidden flex flex-col">
                <div className="flex items-center justify-between mb-8">
                   <div className="flex items-center gap-4">

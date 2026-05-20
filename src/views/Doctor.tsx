@@ -412,20 +412,20 @@ export function Doctor() {
               {/* SOAP & Diagnosis */}
               <div className="col-span-12 lg:col-span-8 flex flex-col gap-4 h-full">
                 <div className="bento-card p-8 flex-1 flex flex-col">
-                  <div className="flex justify-between items-start mb-8">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                     <div>
                       <span className="px-2 py-1 bg-blue-50 text-brand-blue text-[10px] font-black rounded uppercase tracking-widest">Active Consultation</span>
                       <h2 className="text-2xl font-black text-slate-900 tracking-tighter uppercase italic mt-2">{selectedVisitData.patient.firstName} {selectedVisitData.patient.lastName}</h2>
                       <p className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">Visit_UID: {selectedVisitData.visit.id}</p>
                     </div>
-                    <div className="flex gap-2">
-                       <nav className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+                    <div className="flex gap-2 max-w-full overflow-hidden">
+                       <nav className="flex gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full scrollbar-none">
                         {(['vitals', 'soap', 'orders', 'pharmacy', 'history'] as const).map(tab => (
                           <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
                             className={cn(
-                              "px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                              "px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shrink-0",
                               activeTab === tab ? "bg-white text-brand-blue shadow-sm" : "text-slate-400 hover:text-slate-600"
                             )}
                           >

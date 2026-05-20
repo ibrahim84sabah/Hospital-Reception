@@ -9,7 +9,8 @@ import {
   LogOut,
   ChevronRight,
   Terminal,
-  Shield
+  Shield,
+  X
 } from 'lucide-react';
 import { useHMS } from '../context/HMSContext';
 import { Department } from '../types';
@@ -30,12 +31,13 @@ const SYSTEM_UNITS: { id: Department; label: string; icon: React.ElementType; su
   { id: 'Logs', label: 'السجلات', sub: 'Operational Logs', icon: Terminal },
 ];
 
-export function Sidebar() {
+export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const { activeDepartment, setActiveDepartment, setShowDashboard, logout, userProfile } = useHMS();
 
   const handleLogout = async () => {
     try {
       await logout();
+      if (onClose) onClose();
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -44,6 +46,7 @@ export function Sidebar() {
   const handleDeptClick = (deptId: Department) => {
     setActiveDepartment(deptId);
     setShowDashboard(false);
+    if (onClose) onClose();
   };
 
   const filteredDepartments = DEPARTMENTS.filter(dept => {
@@ -63,16 +66,30 @@ export function Sidebar() {
   });
 
   return (
-    <aside className="w-68 bg-brand-dark text-slate-400 flex flex-col h-screen sticky top-0 z-20 border-r border-slate-800">
+    <aside className={cn(
+      "w-68 bg-brand-dark text-slate-400 flex flex-col h-screen fixed lg:sticky top-0 left-0 z-50 border-r border-slate-800 transition-transform duration-300 shrink-0",
+      isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+    )}>
       <div className="p-8 flex-grow overflow-y-auto custom-scrollbar">
-        <div className="flex items-center gap-3 mb-10">
-          <div className="w-10 h-10 bg-brand-blue rounded-xl flex items-center justify-center shadow-lg shadow-brand-blue/30 transform rotate-3">
-            <Stethoscope className="w-6 h-6 text-white" />
+        <div className="flex items-center justify-between mb-10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-brand-blue rounded-xl flex items-center justify-center shadow-lg shadow-brand-blue/30 transform rotate-3">
+              <Stethoscope className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-white font-black tracking-tighter text-base leading-none uppercase">CareSync</h2>
+              <p className="text-[10px] text-slate-500 font-bold tracking-[0.2em] mt-1">NODE_V1</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-white font-black tracking-tighter text-base leading-none uppercase">CareSync</h2>
-            <p className="text-[10px] text-slate-500 font-bold tracking-[0.2em] mt-1">NODE_V1</p>
-          </div>
+          {onClose && (
+            <button 
+              onClick={onClose}
+              className="lg:hidden p-2 text-slate-500 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+              title="Close Menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         <nav className="space-y-6">

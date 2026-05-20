@@ -81,9 +81,9 @@ export function LabRadiology() {
   };
 
   return (
-    <div className="grid grid-cols-12 gap-6 h-full p-2">
+    <div className="grid grid-cols-12 gap-6 h-auto lg:h-full p-2">
       {/* Search & Entry Queue */}
-      <section className="col-span-12 lg:col-span-3 bento-card p-0 flex flex-col overflow-hidden">
+      <section className="col-span-12 lg:col-span-3 bento-card p-0 flex flex-col overflow-hidden min-h-[300px]">
         <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
           <div>
             <h2 className="text-sm font-black tracking-widest uppercase flex items-center gap-2">
@@ -205,7 +205,7 @@ export function LabRadiology() {
                               <p className="text-[10px] font-black uppercase text-slate-400 mb-2 italic flex items-center gap-2">
                                 <ClipboardList className="w-3 h-3" /> Technical Entry Panel
                               </p>
-                              <div className="overflow-hidden rounded-2xl border border-slate-100">
+                              <div className="overflow-x-auto rounded-2xl border border-slate-100">
                                 <table className="w-full text-left text-xs">
                                   <thead>
                                     <tr className="bg-slate-50 border-b border-slate-100">
@@ -286,7 +286,7 @@ export function LabRadiology() {
 
       {/* Side Info / Biometrics */}
       <section className="col-span-12 lg:col-span-3 flex flex-col gap-6">
-         <div className="bento-card-dark p-6 bg-brand-dark flex flex-col h-1/2 justify-between">
+         <div className="bento-card-dark p-6 bg-brand-dark flex flex-col h-auto lg:h-1/2 min-h-[160px] justify-between">
             <div>
               <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-6 italic">Secure Channel</h3>
               <div className="space-y-4">

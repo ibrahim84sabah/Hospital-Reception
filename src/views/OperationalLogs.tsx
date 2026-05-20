@@ -14,14 +14,14 @@ export function OperationalLogs() {
 
   return (
     <div className="h-full flex flex-col space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-black tracking-tight uppercase italic text-brand-dark">
             Operational <span className="text-brand-blue">Security Logs</span>
           </h2>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">System Audit & Control Panel</p>
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-4 self-start sm:self-auto">
           <button 
             onClick={() => setIsConfirming(true)}
             className="px-6 py-2 bg-rose-50 text-rose-600 text-[10px] font-black rounded-xl border border-rose-100 uppercase tracking-widest flex items-center gap-2 hover:bg-rose-100 transition-colors"
@@ -42,7 +42,7 @@ export function OperationalLogs() {
           animate={{ opacity: 1, scale: 1 }}
           className="p-8 bg-rose-600 rounded-[2rem] text-white shadow-2xl shadow-rose-200"
         >
-          <div className="flex items-start gap-6">
+          <div className="flex flex-col sm:flex-row items-start gap-6">
             <div className="w-16 h-16 bg-white/20 rounded-3xl flex items-center justify-center shrink-0">
                <AlertTriangle className="w-8 h-8" />
             </div>
@@ -52,7 +52,7 @@ export function OperationalLogs() {
                 You are about to purge <span className="underline decoration-2 underline-offset-4">{patients.length} patients</span> and <span className="underline decoration-2 underline-offset-4">{visits.length} session logs</span> from the secure core. 
                 This action is irreversible and will result in a total state reset.
               </p>
-              <div className="flex gap-4">
+              <div className="flex flex-col sm:flex-row gap-4">
                 <button 
                   onClick={handlePurge}
                   className="px-8 py-3 bg-white text-rose-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-50 transition-all shadow-xl"
@@ -71,13 +71,13 @@ export function OperationalLogs() {
         </motion.div>
       )}
 
-      <section className="flex-1 bento-card-dark bg-brand-dark border-slate-800 shadow-2xl overflow-hidden flex flex-col min-h-0">
-        <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-white/2">
+      <section className="flex-1 bento-card-dark bg-brand-dark border-slate-800 shadow-2xl overflow-hidden flex flex-col min-h-[400px]">
+        <div className="px-6 py-4 border-b border-white/5 flex flex-col md:flex-row gap-4 justify-between md:items-center bg-white/2">
           <span className="text-[10px] font-mono font-bold text-brand-blue uppercase tracking-widest flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-brand-blue animate-pulse" />
             OPERATIONAL_LOG // REAL_TIME_STREAM
           </span>
-          <div className="flex gap-6 text-[9px] font-mono text-slate-500 uppercase font-black">
+          <div className="flex flex-wrap gap-4 md:gap-6 text-[9px] font-mono text-slate-500 uppercase font-black">
             <span>Kernel: v1.0.4-i</span>
             <span>Node: SECTOR-7G</span>
             <span>Uptime: 14:22:01</span>

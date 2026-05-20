@@ -1,7 +1,6 @@
 import React from 'react';
 import { Patient, Visit, Order } from '../types';
 import { LAB_TESTS_METADATA } from '../constants/labTests';
-import { format } from 'date-fns';
 
 interface LabReportTemplateProps {
   patient: Patient;
@@ -13,7 +12,7 @@ interface LabReportTemplateProps {
   onPrint?: () => void;
 }
 
-export function LabReportTemplate({ patient, order, assignedDoctorName, title, arabicTitle, onPrint }: LabReportTemplateProps) {
+export function LabReportTemplate({ patient, order, title, onPrint }: LabReportTemplateProps) {
   const age = 2024 - new Date(patient.dob).getFullYear();
 
   return (

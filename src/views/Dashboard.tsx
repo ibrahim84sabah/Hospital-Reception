@@ -19,7 +19,7 @@ export function Dashboard() {
   const getDeptCount = (dept: string) => visits.filter(v => v.currentDepartment === dept && v.status !== 'Complete' && v.status !== 'Cancelled').length;
 
   return (
-    <div className="grid grid-cols-12 grid-rows-6 gap-4 h-full">
+    <div className="grid grid-cols-12 lg:grid-rows-6 gap-4 lg:h-full h-auto">
       {/* Overview Card */}
       <section className="col-span-12 lg:col-span-4 row-span-3 bento-card p-6 flex flex-col justify-between">
         <div>
@@ -70,14 +70,14 @@ export function Dashboard() {
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
               <h3 className="font-black text-xs uppercase tracking-widest">Operational Network Status</h3>
             </div>
-            <div className="flex gap-4 text-[10px] font-mono text-slate-500">
+            <div className="hidden sm:flex gap-4 text-[10px] font-mono text-slate-500">
               <span>LIMS: CONNECTED</span>
               <span>RIS: OPTIMIZED</span>
               <span>PACS: ACTIVE</span>
             </div>
           </div>
           
-          <div className="flex-1 grid grid-cols-4 gap-4">
+          <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4">
             {['Reception', 'Nurse', 'Doctor', 'Pharmacy'].map((dept) => (
               <div key={dept} className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col justify-between hover:bg-white/10 transition-colors group-hover:scale-[1.02]">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{dept}</span>

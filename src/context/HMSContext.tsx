@@ -459,7 +459,7 @@ export function HMSProvider({ children }: { children: React.ReactNode }) {
     try {
       // Sanitize updates - Firestore doesn't allow undefined values
       const sanitizedUpdates = Object.fromEntries(
-        Object.entries(updates).filter(([_, v]) => v !== undefined)
+        Object.entries(updates).filter(([, v]) => v !== undefined)
       );
       await updateDoc(doc(db, 'users', uid), sanitizedUpdates);
     } catch (error) {

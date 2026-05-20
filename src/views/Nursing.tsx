@@ -4,7 +4,6 @@ import {
   Thermometer, 
   Activity, 
   Stethoscope, 
-  Clock, 
   Shield, 
   HeartPulse 
 } from 'lucide-react';
@@ -100,9 +99,9 @@ export function Nursing() {
   };
 
   return (
-    <div className="grid grid-cols-12 gap-6 h-full p-2">
+    <div className="grid grid-cols-12 gap-6 h-auto lg:h-full p-2">
       {/* Patient Queue */}
-      <section className="col-span-12 lg:col-span-3 bento-card p-0 flex flex-col overflow-hidden">
+      <section className="col-span-12 lg:col-span-3 bento-card p-0 flex flex-col overflow-hidden min-h-[300px]">
         <div className="p-6 border-b border-slate-50 bg-slate-50/50">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-black tracking-widest uppercase flex items-center gap-2">
@@ -263,7 +262,7 @@ export function Nursing() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                   <div className="space-y-4">
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Temp (°C)</label>

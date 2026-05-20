@@ -54,9 +54,9 @@ export function Pharmacy() {
   };
 
   return (
-    <div className="grid grid-cols-12 gap-6 h-full p-2">
+    <div className="grid grid-cols-12 gap-6 h-auto lg:h-full p-2">
       {/* Pharmacy Queue */}
-      <section className="col-span-12 lg:col-span-3 bento-card p-0 flex flex-col overflow-hidden">
+      <section className="col-span-12 lg:col-span-3 bento-card p-0 flex flex-col overflow-hidden min-h-[300px]">
         <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
           <div>
             <h2 className="text-sm font-black tracking-widest uppercase flex items-center gap-2">
@@ -160,7 +160,7 @@ export function Pharmacy() {
                   
                   return (
                     <div key={order.id} className="p-6 bg-slate-50 border border-slate-100 rounded-3xl flex flex-col gap-4 group hover:border-orange-500/30 transition-all shadow-sm">
-                       <div className="flex items-center justify-between">
+                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                          <div className="flex items-center gap-4">
                             <div className="w-12 h-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center shadow-inner">
                                <Pill className="w-6 h-6" />
@@ -217,7 +217,7 @@ export function Pharmacy() {
               </div>
 
               {!selectedVisit.isPaid && (
-                 <div className="mt-8 p-6 bg-brand-blue rounded-3xl text-white flex items-center justify-between shadow-2xl shadow-brand-blue/20">
+                 <div className="mt-8 p-6 bg-brand-blue rounded-3xl text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xl shadow-brand-blue/20">
                     <div className="flex items-center gap-4">
                        <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
                           <CreditCard className="w-6 h-6" />
